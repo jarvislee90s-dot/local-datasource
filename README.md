@@ -1,6 +1,73 @@
 # Local Datasource
 
-本地 MCP（Model Context Protocol）数据服务器。通过免费公开接口查询金融市场、宏观经济和学术论文数据，请求直接从本机发出，不需要第三方平台账号，也不依赖任何云服务商的中继。
+一个**本地运行的 MCP（Model Context Protocol）数据服务器**。它让任何支持 MCP 的 Agent（Claude Code、Codex、Cursor、OpenCode 等）都能直接查询金融市场、宏观经济和学术论文数据，而无需第三方账号、不消耗云额度、不经过外部中继。
+
+---
+
+## 一句话介绍
+
+`local-datasource` 把 `akshare`、`yfinance`、`wbgapi`、`arxiv` 等免费公开接口封装成 4 个标准 MCP tool，Agent 只需要像调用本地函数一样请求数据，即可获得结构化 CSV 输出。
+
+---
+
+## 为什么需要这个项目
+
+在日常投研、尽调、学术检索或自动化报告生成中，Agent 经常需要实时数据：
+
+- 查一只股票过去一年的走势
+- 对比黄金、美股、A股等多资产表现
+- 拉取某个国家的 GDP/CPI 数据
+- 检索某个领域的 arXiv 论文
+
+这些需求本身并不复杂，但常见方案要么需要登录某个平台并消耗额度，要么把查询请求发到云端。`local-datasource` 希望提供一种**透明、可控、低成本**的替代方案：
+
+- **数据请求不出本机**：适合对合规、隐私敏感的场景。
+- **无需账号和额度**：基于公开接口，安装完就能用。
+- **标准 MCP 协议**：不绑定任何特定 Agent，可被多家产品复用。
+- **源码可见、可扩展**：增加新数据源或调整输出格式都很直接。
+
+---
+
+## 核心特点
+
+- ✅ **A股 / 港股 / 美股**：日线行情，支持前复权/后复权。
+- ✅ **美股 / ETF / 全球资产**：默认 `akshare` 美股接口，可回退 `yfinance`。
+- ✅ **世界银行宏观指标**：GDP、CPI、人口等。
+- ✅ **arXiv 论文搜索**：标题、作者、摘要、PDF 链接结构化输出。
+- ✅ **统一 CSV 输出**：每个 tool 都把结果写到 `file_path`，并返回前 5 行预览。
+- ✅ **零 API Key**：所有默认数据源均免费使用。
+- ✅ **跨 Agent 复用**：标准 MCP Server，配置一条 `command` 即可接入。
+
+---
+
+## 适用人群
+
+- 需要在 Agent 工作流里频繁查数据的投研、分析师、开发者。
+- 不希望把查询请求发送到云端的本地优先用户。
+- 想学习/定制 MCP 数据服务器实现的开发者。
+
+---
+
+## 快速开始
+
+```bash
+# 1. 克隆并安装
+pip install -e .
+
+# 2. 启动 MCP 服务
+local-datasource
+
+# 3. 在 Agent 的 MCP 配置中添加
+{
+  "mcpServers": {
+    "local-datasource": {
+      "command": "local-datasource"
+    }
+  }
+}
+```
+
+---
 
 ## 覆盖范围
 
@@ -10,6 +77,8 @@
 | 美股 / ETF / 全球资产 | `query_yfinance` | `akshare`（默认）/ `yfinance`（备选） | 否 |
 | 世界银行宏观指标 | `query_worldbank` | `wbgapi` | 否 |
 | arXiv 学术论文 | `query_arxiv` | `arxiv` | 否 |
+
+---
 
 ## 架构
 
@@ -22,6 +91,8 @@ akshare / yfinance / wbgapi / arxiv
         ↓ 原始数据源
 同花顺 / Yahoo Finance / World Bank / arxiv.org
 ```
+
+---
 
 ## 文件结构
 
@@ -40,10 +111,11 @@ akshare / yfinance / wbgapi / arxiv
 │       ├── yahoo.py                # 美股/全球资产
 │       ├── worldbank.py            # 世界银行
 │       └── arxiv.py                # arXiv 论文
-├── tests/                          # 单元测试 + 集成测试
 └── demos/                          # 示例脚本
     └── mcp_query_demo.py           # 多资产查询 + 归一化走势图
 ```
+
+---
 
 ## 依赖
 
@@ -59,6 +131,8 @@ akshare / yfinance / wbgapi / arxiv
 可选：
 - `matplotlib`：运行 `demos/mcp_query_demo.py` 绘图
 
+---
+
 ## 安装
 
 ```bash
@@ -66,6 +140,8 @@ pip install -e .
 ```
 
 安装完成后，`local-datasource` 命令会被加入 PATH。
+
+---
 
 ## 启动 MCP 服务
 
@@ -80,6 +156,8 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
 ```
 
 若返回初始化结果，说明服务正常。
+
+---
 
 ## Agent 配置示例
 
@@ -126,6 +204,8 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
   }
 }
 ```
+
+---
 
 ## 调用数据案例
 
@@ -207,7 +287,9 @@ Tool：`query_worldbank`
 
 Tool：`query_arxiv`
 
-### 多资产归一化对比
+---
+
+## 多资产归一化对比
 
 参考 `demos/mcp_query_demo.py`：它通过 MCP 调用多个工具，读取生成的 CSV，计算归一化价格，并绘制对比图。
 
@@ -219,6 +301,8 @@ python demos/mcp_query_demo.py
 - `demos/outputs/*.csv`：各资产原始行情
 - `demos/outputs/normalized_returns.png`：归一化走势图
 - `demos/outputs/summary.csv`：汇总表
+
+---
 
 ## 配置
 
@@ -237,19 +321,38 @@ providers:
 LOCAL_DATASOURCE_CONFIG=/path/to/config.yaml local-datasource
 ```
 
+---
+
+## 扩展新数据源
+
+`src/local_datasource/providers/` 下的每个文件都是一个独立适配器，新增数据源的步骤：
+
+1. 在 `providers/` 新增一个 Python 文件，实现 `query_xxx(...)` 函数，返回 `tuple[str, str]`（文件路径 + 预览文本）。
+2. 在 `server.py` 的 `build_tools()` 中注册新 tool。
+3. 在 `handle_call_tool()` 中增加路由。
+4. 更新 `SKILL.md` 和 `README.md` 的 tool 说明。
+
+---
+
 ## 测试
+
+测试文件位于本地 `tests/` 目录（未提交到 GitHub）：
 
 ```bash
 python -m pytest tests/ -v
 ```
 
-包含 8 个测试：配置加载、格式化、4 个 provider 的集成测试、MCP server 工具注册。
+包含配置加载、格式化、4 个 provider 的集成测试、MCP server 工具注册。
+
+---
 
 ## 注意事项
 
 - `yfinance` 容易被 Yahoo Finance 限流，因此默认优先使用 `akshare`。
 - `akshare` 的接口可能随时间变化，建议定期更新到较新版本。
 - World Bank 和 arXiv 通常稳定且无需 API key。
+
+---
 
 ## 与 kimi-datasource 的异同
 
