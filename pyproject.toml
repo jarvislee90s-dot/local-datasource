@@ -1,0 +1,21 @@
+[project]
+name = "local-datasource"
+version = "0.1.0"
+description = "Local MCP server for financial, macro, and academic data"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.6.0",
+    "akshare>=1.18.0",
+    "yfinance>=0.2.54",
+    "wbgapi>=1.0.12",
+    "arxiv>=2.1.0",
+    "pandas>=2.0.0",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+local-datasource = "local_datasource.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

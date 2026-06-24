@@ -1,0 +1,4 @@
+providers:
+  yahoo:
+    # Default uses akshare (free, no key). Set use_yfinance: true to use Yahoo Finance instead.
+    use_yfinance: false
