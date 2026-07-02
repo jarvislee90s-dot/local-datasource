@@ -63,3 +63,17 @@ def test_query_bond_issue_info_requires_bond_code():
     from local_datasource.providers import bond
     with pytest.raises(ValueError, match="issue_info requires bond_code"):
         bond.query_bond(kind="issue_info", file_path="/tmp/x.csv")
+
+
+@pytest.mark.skipif(os.environ.get("SKIP_INTEGRATION"), reason="integration")
+def test_query_bond_credit_daily():
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
+        path = f.name
+    try:
+        file_path, summary = query_bond(
+            kind="credit_daily", symbol="sh019547",
+            start_date="2025-01-01", end_date="2025-06-30", file_path=path)
+        assert os.path.exists(file_path)
+        assert "Rows:" in summary
+    finally:
+        os.unlink(path)

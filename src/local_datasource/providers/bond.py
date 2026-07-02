@@ -61,7 +61,15 @@ def _query_issue_info(bond_code: str) -> pd.DataFrame:
 
 
 def _query_credit_daily(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
-    raise NotImplementedError("credit_daily implemented in Task 4")
+    """信用债交易所历史日行情(bond_zh_hs_daily),按日期过滤。"""
+    if not re.match(r"^(sh|sz)\d+$", symbol, re.IGNORECASE):
+        raise ValueError(f"credit_daily symbol must be like sh019623, got: {symbol}")
+    df = ak.bond_zh_hs_daily(symbol=symbol.lower())
+    if df.empty:
+        raise ValueError(f"No data returned for {symbol}")
+    df = df.copy()
+    df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
+    return df[(df["date"] >= start_date) & (df["date"] <= end_date)].copy()
 
 
 def query_bond(
