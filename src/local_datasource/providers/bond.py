@@ -43,7 +43,21 @@ def _query_yield_curve(start_date: str, end_date: str) -> pd.DataFrame:
 
 
 def _query_issue_info(bond_code: str) -> pd.DataFrame:
-    raise NotImplementedError("issue_info implemented in Task 3")
+    """信用债发行信息(bond_info_cm),精确过滤排除子串误匹配。
+
+    实测 bond_info_cm(bond_code='2180495') 会返回 2 条:
+      - 21徐州新盛03 / 2180495(目标)
+      - 21赣州银行CD111 / 112180495(子串误命中)
+    必须精确匹配 df['债券代码']==code 后再返回。
+    """
+    code = _normalize_bond_code(bond_code)
+    df = ak.bond_info_cm(bond_code=code)
+    if df.empty:
+        raise ValueError(f"No bond found for code: {bond_code}")
+    df = df[df["债券代码"].astype(str) == code].copy()
+    if df.empty:
+        raise ValueError(f"No exact match for bond code: {bond_code}")
+    return df
 
 
 def _query_credit_daily(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
