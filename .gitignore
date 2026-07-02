@@ -52,7 +52,6 @@ demos/outputs/
 
 # Local debug/reference files not needed in the published package
 Reference/
-docs/superpowers/
 tests/
 demos/connectivity_report.md
 demos/test_data_connectivity.py
