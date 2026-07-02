@@ -38,6 +38,61 @@ def _normalize_cb_code(code: str) -> str:
     raise ValueError(f"Invalid CB code: {code}")
 
 
-def query_convertible_bond(kind: CbKind, file_path: str, **kwargs) -> tuple[str, str]:
-    """查询可转债数据并输出 CSV。(桩,后续 Task 填充)"""
-    raise NotImplementedError("query_convertible_bond implemented in later tasks")
+def _query_overview(keyword: str | None = None) -> pd.DataFrame:
+    """可转债一览(bond_zh_cov),含转股溢价率/评级/规模。可选关键字过滤。"""
+    df = ak.bond_zh_cov()
+    if df.empty:
+        raise ValueError("No convertible bond overview data")
+    if keyword:
+        mask = df["债券简称"].astype(str).str.contains(keyword, na=False) | \
+               df["正股简称"].astype(str).str.contains(keyword, na=False)
+        df = df[mask].copy()
+        if df.empty:
+            raise ValueError(f"No CB matched keyword: {keyword}")
+    return df
+
+
+def _query_terms() -> pd.DataFrame:
+    raise NotImplementedError("terms implemented in Task 8")
+
+
+def _query_history(symbol: str, start_date: str, end_date: str, period: str) -> pd.DataFrame:
+    raise NotImplementedError("history implemented in Task 9")
+
+
+def _query_issuer_finance(bond_code: str | None, stock_code: str | None, report_type: str) -> pd.DataFrame:
+    raise NotImplementedError("issuer_finance implemented in Task 10")
+
+
+def query_convertible_bond(
+    kind: CbKind,
+    file_path: str,
+    symbol: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    period: str = "daily",
+    bond_code: str | None = None,
+    stock_code: str | None = None,
+    report_type: ReportType = "资产负债表",
+    keyword: str | None = None,
+) -> tuple[str, str]:
+    """查询可转债数据并输出 CSV。"""
+    if kind == "overview":
+        df = _query_overview(keyword=keyword)
+    elif kind == "terms":
+        df = _query_terms()
+    elif kind == "history":
+        if not symbol or not start_date or not end_date:
+            raise ValueError("history requires symbol, start_date, end_date")
+        df = _query_history(symbol, start_date, end_date, period)
+    elif kind == "issuer_finance":
+        if not bond_code and not stock_code:
+            raise ValueError("issuer_finance requires bond_code or stock_code")
+        df = _query_issuer_finance(bond_code, stock_code, report_type)
+    else:
+        raise ValueError(f"Unsupported CB kind: {kind}")
+
+    if df.empty:
+        raise ValueError(f"No data returned for CB kind={kind}")
+
+    return format_csv_output(df, file_path)
