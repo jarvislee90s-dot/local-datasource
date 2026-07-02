@@ -44,3 +44,17 @@ def test_query_cb_overview():
         assert "Rows:" in summary
     finally:
         os.unlink(path)
+
+
+@pytest.mark.skipif(os.environ.get("SKIP_INTEGRATION"), reason="integration")
+def test_query_cb_terms():
+    """可转债条款:集思录强赎+剩余期限/到期税前收益,行数>0。"""
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
+        path = f.name
+    try:
+        file_path, summary = query_convertible_bond(kind="terms", file_path=path)
+        assert os.path.exists(file_path)
+        assert "Rows:" in summary
+        assert "Rows: 0" not in summary
+    finally:
+        os.unlink(path)

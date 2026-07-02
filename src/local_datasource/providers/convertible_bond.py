@@ -53,7 +53,21 @@ def _query_overview(keyword: str | None = None) -> pd.DataFrame:
 
 
 def _query_terms() -> pd.DataFrame:
-    raise NotImplementedError("terms implemented in Task 8")
+    """可转债条款信息:集思录强赎状态 + 剩余期限/到期税前收益。
+
+    合并 bond_cb_redeem_jsl()(强赎/回售/下修)与 bond_cb_summary()(剩余期限/到期收益)。
+    若 bond_cb_summary 不可用则仅返回强赎表。
+    """
+    redeem = ak.bond_cb_redeem_jsl()
+    if redeem is None or redeem.empty:
+        raise ValueError("No CB redeem data from jsl")
+    try:
+        summary = ak.bond_cb_summary()
+        if summary is not None and not summary.empty:
+            return redeem.merge(summary, on="债券代码", how="left")
+    except Exception:
+        pass
+    return redeem
 
 
 def _query_history(symbol: str, start_date: str, end_date: str, period: str) -> pd.DataFrame:
