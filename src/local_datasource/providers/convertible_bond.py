@@ -71,7 +71,26 @@ def _query_terms() -> pd.DataFrame:
 
 
 def _query_history(symbol: str, start_date: str, end_date: str, period: str) -> pd.DataFrame:
-    raise NotImplementedError("history implemented in Task 9")
+    """可转债历史K线。
+
+    period=daily → bond_zh_hs_cov_daily(日K)
+    period=min  → bond_zh_hs_cov_min(分钟K)
+    """
+    code = _normalize_cb_code(symbol)
+    if period == "daily":
+        df = ak.bond_zh_hs_cov_daily(symbol=code)
+        if df.empty:
+            raise ValueError(f"No daily history for {symbol}")
+        df = df.copy()
+        df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
+        return df[(df["date"] >= start_date) & (df["date"] <= end_date)].copy()
+    elif period == "min":
+        df = ak.bond_zh_hs_cov_min(symbol=code)
+        if df.empty:
+            raise ValueError(f"No minute history for {symbol}")
+        return df
+    else:
+        raise ValueError(f"Unsupported period: {period}, use 'daily' or 'min'")
 
 
 def _query_issuer_finance(bond_code: str | None, stock_code: str | None, report_type: str) -> pd.DataFrame:

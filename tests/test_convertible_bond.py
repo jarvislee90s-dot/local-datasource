@@ -58,3 +58,26 @@ def test_query_cb_terms():
         assert "Rows: 0" not in summary
     finally:
         os.unlink(path)
+
+
+@pytest.mark.skipif(os.environ.get("SKIP_INTEGRATION"), reason="integration")
+def test_query_cb_history_daily():
+    """可转债历史日K:sz128039 返回开高低收量。"""
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
+        path = f.name
+    try:
+        file_path, summary = query_convertible_bond(
+            kind="history", symbol="sz128039",
+            start_date="2024-01-01", end_date="2024-06-30",
+            period="daily", file_path=path)
+        assert os.path.exists(file_path)
+        assert "Rows:" in summary
+        assert "Rows: 0" not in summary
+    finally:
+        os.unlink(path)
+
+
+def test_query_cb_history_requires_symbol():
+    from local_datasource.providers import convertible_bond as cb
+    with pytest.raises(ValueError, match="history requires"):
+        cb.query_convertible_bond(kind="history", start_date="2024-01-01", end_date="2024-06-30", file_path="/tmp/x.csv")
