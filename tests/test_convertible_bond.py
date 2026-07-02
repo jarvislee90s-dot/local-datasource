@@ -81,3 +81,35 @@ def test_query_cb_history_requires_symbol():
     from local_datasource.providers import convertible_bond as cb
     with pytest.raises(ValueError, match="history requires"):
         cb.query_convertible_bond(kind="history", start_date="2024-01-01", end_date="2024-06-30", file_path="/tmp/x.csv")
+
+
+@pytest.mark.skipif(os.environ.get("SKIP_INTEGRATION"), reason="integration")
+def test_query_cb_issuer_finance_via_stock_code():
+    """通过正股代码取发行人财务:603938(益丰药房)返回三大报表。"""
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
+        path = f.name
+    try:
+        file_path, summary = query_convertible_bond(
+            kind="issuer_finance", stock_code="sh603938",
+            report_type="资产负债表", file_path=path)
+        assert os.path.exists(file_path)
+        assert "Rows:" in summary
+    finally:
+        os.unlink(path)
+
+
+def test_query_cb_issuer_finance_requires_code():
+    from local_datasource.providers import convertible_bond as cb
+    with pytest.raises(ValueError, match="issuer_finance requires"):
+        cb.query_convertible_bond(kind="issuer_finance", file_path="/tmp/x.csv")
+
+
+def test_query_cb_issuer_finance_nonlisted_returns_hint():
+    """非上市发行人(城投)解析正股失败时返回引导性提示 CSV,不报错。
+
+    纯函数测试:直接测 _build_nonlisted_hint 输出格式。
+    """
+    from local_datasource.providers import convertible_bond as cb
+    hint_df = cb._build_nonlisted_hint("某城投平台")
+    assert len(hint_df) == 1
+    assert "非上市" in str(hint_df.iloc[0].values) or "Wind" in str(hint_df.iloc[0].values)

@@ -93,8 +93,65 @@ def _query_history(symbol: str, start_date: str, end_date: str, period: str) -> 
         raise ValueError(f"Unsupported period: {period}, use 'daily' or 'min'")
 
 
-def _query_issuer_finance(bond_code: str | None, stock_code: str | None, report_type: str) -> pd.DataFrame:
-    raise NotImplementedError("issuer_finance implemented in Task 10")
+def _resolve_stock_code_from_cb(bond_code: str) -> tuple[str, str] | None:
+    """从可转债代码解析出正股代码与发行人名称。
+
+    通过 bond_zh_cov() 全表过滤出对应正股代码。
+    返回 (正股代码, 发行人名称) 或 None(非上市发行人/未找到)。
+    """
+    code = _normalize_cb_code(bond_code)
+    plain_code = re.sub(r"^(sh|sz)", "", code)
+    df = ak.bond_zh_cov()
+    if df.empty:
+        return None
+    row = df[df["债券代码"].astype(str) == plain_code]
+    if row.empty:
+        return None
+    stock_code = str(row.iloc[0]["正股代码"])
+    issuer_name = str(row.iloc[0]["正股简称"])
+    if stock_code.startswith("6"):
+        stock_code = f"sh{stock_code}"
+    else:
+        stock_code = f"sz{stock_code}"
+    return stock_code, issuer_name
+
+
+def _build_nonlisted_hint(issuer_name: str) -> pd.DataFrame:
+    """构造非上市发行人财务缺口的引导性提示 DataFrame(不报错)。"""
+    return pd.DataFrame([{
+        "提示": f"发行人 {issuer_name} 为非上市主体,免费层无财务数据,建议查 Wind/企业预警通",
+    }])
+
+
+def _query_issuer_finance(
+    bond_code: str | None,
+    stock_code: str | None,
+    report_type: str,
+) -> pd.DataFrame:
+    """发行人财务三大报表。
+
+    - stock_code 给定 → 直接查该正股
+    - bond_code 给定 → 先解析正股代码,再查;解析失败(城投/非上市)→ 返回引导性提示
+    """
+    if stock_code:
+        sc = stock_code.lower()
+        if not re.match(r"^(sh|sz)\d+$", sc):
+            if sc.isdigit() and len(sc) == 6:
+                sc = f"sh{sc}" if sc.startswith("6") else f"sz{sc}"
+            else:
+                raise ValueError(f"Invalid stock_code: {stock_code}")
+        df = ak.stock_financial_report_sina(stock=sc, symbol=report_type)
+        if df.empty:
+            raise ValueError(f"No financial data for stock {stock_code}")
+        return df
+    resolved = _resolve_stock_code_from_cb(bond_code)
+    if resolved is None:
+        return _build_nonlisted_hint(bond_code or "未知发行人")
+    stock_code_resolved, issuer_name = resolved
+    df = ak.stock_financial_report_sina(stock=stock_code_resolved, symbol=report_type)
+    if df.empty:
+        return _build_nonlisted_hint(issuer_name)
+    return df
 
 
 def query_convertible_bond(
