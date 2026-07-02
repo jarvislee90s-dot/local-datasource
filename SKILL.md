@@ -12,7 +12,7 @@ compatibility: |
 
 # Local Datasource — Agent 执行手册
 
-本 skill 通过本地 MCP server 提供 4 个数据查询工具。Agent 的核心职责是：
+本 skill 通过本地 MCP server 提供 6 个数据查询工具。Agent 的核心职责是：
 **理解用户意图 → 选择合适工具 → 构造参数 → 解释返回结果**。
 数据的实际获取与 CSV 落盘由 MCP server 完成。
 
@@ -23,6 +23,8 @@ compatibility: |
 - 用户要查股票、ETF、商品（如黄金）的历史价格或走势。
 - 用户要查宏观经济指标（GDP、CPI、利率、人口等）。
 - 用户要查 arXiv 论文，并按标题、作者、日期结构化返回。
+- 用户要查中国境内债券（国债收益率曲线、信用债发行信息与评级、交易所行情）。
+- 用户要查可转债（一览与转股溢价率、强赎/回售条款与剩余期限、历史K线、发行人正股财务报表）。
 - 用户要求绘制多只资产/指数的归一化对比图。
 - 用户提到“不用登录”、“本地调用”、“免费 API”等偏好。
 
@@ -40,6 +42,8 @@ compatibility: |
 | 美股 / ETF / 海外指数 快速查 | `query_yfinance` | 默认 akshare；可回退 yfinance |
 | 世界银行宏观指标 | `query_worldbank` | 按指标代码 + 国家代码查询 |
 | arXiv 论文 | `query_arxiv` | 关键词、排序、max_results |
+| 国债收益率曲线 / 信用债发行信息 / 交易所行情 | `query_bond` | kind 分流，无需 key |
+| 可转债一览 / 条款 / 历史K线 / 发行人财务 | `query_convertible_bond` | kind 分流，发行人财务支持正股代码直查 |
 | 多资产归一化对比 | 组合调用上述工具 → Agent 用 pandas/matplotlib 处理 | 见工作流 5 |
 
 ## 三、各工具详细规范
@@ -209,3 +213,51 @@ compatibility: |
 
 5. **严禁编造数据**
    - 任何时候都不要把错误提示隐藏或伪造数据返回给用户。
+
+## query_bond — 中国境内债券
+
+### 必填参数
+
+- `kind`：`yield_curve` / `issue_info` / `credit_daily`
+- `file_path`：输出 CSV 路径
+
+### 可选参数
+
+- `start_date` / `end_date`（`YYYY-MM-DD`，yield_curve / credit_daily 必填）
+- `bond_code`（issue_info 必填，支持 `2180495.IB` / `2180495` 格式）
+- `symbol`（credit_daily 必填，如 `sh019623`）
+
+### Agent 注意事项
+
+- `issue_info` 已做精确过滤，`2180495.IB` 只返回 1 条对应债券，不会误命中同号段存单（如 `112180495`）。
+- 国债收益率曲线返回各期限（1/3/5/7/10 年等）到期收益率。
+
+### 已知限制
+
+akshare 免费层无法获取：中债估值 YTM / 全价、赎回回售条款详情、剩余期限、城投/非上市发行人财务。需要这些数据时建议提示用户查 Wind / 企业预警通。
+
+## query_convertible_bond — 可转债
+
+### 必填参数
+
+- `kind`：`overview` / `terms` / `history` / `issuer_finance`
+- `file_path`：输出 CSV 路径
+
+### 可选参数
+
+- `symbol`（history 必填，如 `sz128039`，支持纯数字 `128039` 自动补前缀）
+- `start_date` / `end_date`（history 必填）
+- `period`：`daily` / `min`（history，默认 daily）
+- `bond_code` / `stock_code`（issuer_finance 二选一）
+- `report_type`：`资产负债表` / `利润表` / `现金流量表`（issuer_finance，默认资产负债表）
+- `keyword`（overview 可选，按债券简称/正股简称字面过滤）
+
+### Agent 注意事项
+
+- `issuer_finance` 用 `bond_code` 时自动解析正股；若发行人为城投/非上市主体（如银行间信用债），返回引导性提示而非报错。
+- `terms` 合并集思录强赎与剩余期限数据。
+
+### 已知限制
+
+- 集思录接口（`bond_cb_redeem_jsl` / `bond_cb_summary`）偶发不可用，失败时 terms 仅返回强赎表。
+- `keyword` 按字面匹配（非正则），含 `+`/`(` 等元字符的关键字不会报错。

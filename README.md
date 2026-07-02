@@ -77,6 +77,8 @@ local-datasource
 | 美股 / ETF / 全球资产 | `query_yfinance` | `akshare`（默认）/ `yfinance`（备选） | 否 |
 | 世界银行宏观指标 | `query_worldbank` | `wbgapi` | 否 |
 | arXiv 学术论文 | `query_arxiv` | `arxiv` | 否 |
+| 中国境内债券（国债收益率曲线/信用债发行信息/交易所行情） | `query_bond` | `akshare` | 否 |
+| 可转债（一览/条款/历史K线/发行人财务） | `query_convertible_bond` | `akshare` | 否 |
 
 ---
 
@@ -287,9 +289,56 @@ Tool：`query_worldbank`
 
 Tool：`query_arxiv`
 
----
+### 查询国债收益率曲线
 
-## 多资产归一化对比
+```json
+{
+  "kind": "yield_curve",
+  "start_date": "2025-01-01",
+  "end_date": "2025-06-30",
+  "file_path": "/tmp/bond_yield.csv"
+}
+```
+
+Tool：`query_bond`（kind=`yield_curve`）
+
+### 查询信用债发行信息
+
+```json
+{
+  "kind": "issue_info",
+  "bond_code": "2180495.IB",
+  "file_path": "/tmp/bond_issue.csv"
+}
+```
+
+Tool：`query_bond`（kind=`issue_info`，支持 `2180495.IB` / `2180495` 格式，精确匹配避免子串误命中）
+
+### 查询可转债一览
+
+```json
+{
+  "kind": "overview",
+  "file_path": "/tmp/cb_overview.csv"
+}
+```
+
+Tool：`query_convertible_bond`（kind=`overview`，返回全市场转债含转股溢价率/评级/规模，可选 `keyword` 按简称过滤）
+
+### 查询发行人财务报表
+
+```json
+{
+  "kind": "issuer_finance",
+  "stock_code": "sh603938",
+  "report_type": "资产负债表",
+  "file_path": "/tmp/issuer_finance.csv"
+}
+```
+
+Tool：`query_convertible_bond`（kind=`issuer_finance`，`bond_code`/`stock_code` 二选一；城投/非上市发行人返回引导性提示而非报错）
+
+---
 
 参考 `demos/mcp_query_demo.py`：它通过 MCP 调用多个工具，读取生成的 CSV，计算归一化价格，并绘制对比图。
 
