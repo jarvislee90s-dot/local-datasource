@@ -47,6 +47,26 @@ def test_query_cb_overview():
 
 
 @pytest.mark.skipif(os.environ.get("SKIP_INTEGRATION"), reason="integration")
+def test_query_cb_overview_keyword_regex_meta_not_error():
+    """含正则元字符的关键字应走字面匹配(ValueError 可,但不抛 re.error)。"""
+    import re as _re
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
+        path = f.name
+    try:
+        try:
+            query_convertible_bond(kind="overview", keyword="银行+", file_path=path)
+            keyword_ok = True
+        except ValueError:
+            # 无匹配是合法结果,只要不是 re.error 即可
+            keyword_ok = True
+        except _re.error:
+            keyword_ok = False
+        assert keyword_ok, "含正则元字符的关键字不应触发 re.error"
+    finally:
+        os.unlink(path)
+
+
+@pytest.mark.skipif(os.environ.get("SKIP_INTEGRATION"), reason="integration")
 def test_query_cb_terms():
     """可转债条款:集思录强赎+剩余期限/到期税前收益,行数>0。"""
     with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:

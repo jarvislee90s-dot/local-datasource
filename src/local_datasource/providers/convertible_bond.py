@@ -44,8 +44,9 @@ def _query_overview(keyword: str | None = None) -> pd.DataFrame:
     if df.empty:
         raise ValueError("No convertible bond overview data")
     if keyword:
-        mask = df["债券简称"].astype(str).str.contains(keyword, na=False) | \
-               df["正股简称"].astype(str).str.contains(keyword, na=False)
+        # 字面匹配(regex=False),避免用户关键字含正则元字符(如银行+)时报错
+        mask = df["债券简称"].astype(str).str.contains(keyword, na=False, regex=False) | \
+               df["正股简称"].astype(str).str.contains(keyword, na=False, regex=False)
         df = df[mask].copy()
         if df.empty:
             raise ValueError(f"No CB matched keyword: {keyword}")
