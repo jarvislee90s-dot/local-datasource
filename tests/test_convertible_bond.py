@@ -133,3 +133,30 @@ def test_query_cb_issuer_finance_nonlisted_returns_hint():
     hint_df = cb._build_nonlisted_hint("某城投平台")
     assert len(hint_df) == 1
     assert "非上市" in str(hint_df.iloc[0].values) or "Wind" in str(hint_df.iloc[0].values)
+
+
+def test_query_cb_issuer_finance_non_cb_bond_code_returns_hint():
+    """企业债/银行间债 code(非转债)走 issuer_finance 不应崩溃,返回非上市提示。
+
+    回归 case:2180495.IB 是企业债(城投),不是转债,_normalize_cb_code 会抛
+    ValueError;_resolve_stock_code_from_cb 应兜住,返回非上市提示而非上抛异常。
+    """
+    from local_datasource.providers import convertible_bond as cb
+    import pandas as pd
+    path = _tmp_csv()
+    try:
+        file_path, summary = cb.query_convertible_bond(
+            kind="issuer_finance", bond_code="2180495.IB",
+            report_type="资产负债表", file_path=path)
+        df = pd.read_csv(file_path)
+        assert len(df) == 1
+        assert "非上市" in str(df.iloc[0].values) or "Wind" in str(df.iloc[0].values)
+    finally:
+        os.unlink(path)
+
+
+def _tmp_csv():
+    import tempfile
+    f = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
+    f.close()
+    return f.name

@@ -99,8 +99,15 @@ def _resolve_stock_code_from_cb(bond_code: str) -> tuple[str, str] | None:
 
     通过 bond_zh_cov() 全表过滤出对应正股代码。
     返回 (正股代码, 发行人名称) 或 None(非上市发行人/未找到)。
+
+    注意:bond_code 若不是转债代码(如企业债/城投债 2180495.IB),
+    归一化会失败,此时返回 None 走非上市引导提示,不抛异常。
     """
-    code = _normalize_cb_code(bond_code)
+    try:
+        code = _normalize_cb_code(bond_code)
+    except ValueError:
+        # 非转债代码(如企业债/银行间债)无法解析正股 → 视为非上市发行人
+        return None
     plain_code = re.sub(r"^(sh|sz)", "", code)
     df = ak.bond_zh_cov()
     if df.empty:
