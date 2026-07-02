@@ -1,10 +1,12 @@
 """MCP Server 入口。
 
-注册 4 个数据查询 tool：
+注册 6 个数据查询 tool：
 - ``query_stock``：A 股 / 港股 / 美股
 - ``query_yfinance``：美股/全球资产（默认 akshare，可选 yfinance）
 - ``query_worldbank``：世界银行宏观指标
 - ``query_arxiv``：arXiv 学术论文
+- ``query_bond``：中国境内债券（国债收益率曲线/信用债发行信息/交易所行情）
+- ``query_convertible_bond``：可转债（一览/条款/历史K线/发行人财务）
 
 通过标准 MCP stdio 协议与 Agent 通信。
 """
@@ -22,6 +24,8 @@ from mcp.server import Server
 
 from local_datasource.config import load_config
 from local_datasource.providers.arxiv import query_arxiv
+from local_datasource.providers.bond import query_bond
+from local_datasource.providers.convertible_bond import query_convertible_bond
 from local_datasource.providers.stock import query_stock
 from local_datasource.providers.worldbank import query_worldbank
 from local_datasource.providers.yahoo import query_yfinance
@@ -94,6 +98,54 @@ def build_tools() -> list[Tool]:
                 "required": ["query", "file_path"],
             },
         ),
+        Tool(
+            name="query_bond",
+            description=(
+                "Query China onshore bonds. Output is written to file_path as CSV. "
+                "kind=yield_curve: 国债到期收益率曲线 (bond_china_yield). "
+                "kind=issue_info: 信用债发行信息含评级 (bond_info_cm). "
+                "kind=credit_daily: 信用债交易所日行情 (bond_zh_hs_daily). "
+                "已知限制(akshare免费层无): 中债估值YTM/全价、赎回回售条款详情、剩余期限、城投发行人财务。"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "kind": {"type": "string", "enum": ["yield_curve", "issue_info", "credit_daily"], "description": "Query type"},
+                    "file_path": {"type": "string", "description": "Output CSV file path"},
+                    "start_date": {"type": "string", "description": "Start date YYYY-MM-DD (yield_curve/credit_daily)"},
+                    "end_date": {"type": "string", "description": "End date YYYY-MM-DD (yield_curve/credit_daily)"},
+                    "bond_code": {"type": "string", "description": "Bond code e.g. 2180495.IB or 2180495 (issue_info)"},
+                    "symbol": {"type": "string", "description": "Exchange bond symbol e.g. sh019623 (credit_daily)"},
+                },
+                "required": ["kind", "file_path"],
+            },
+        ),
+        Tool(
+            name="query_convertible_bond",
+            description=(
+                "Query China convertible bonds. Output is written to file_path as CSV. "
+                "kind=overview: 全市场一览含转股溢价率/评级/规模 (bond_zh_cov). "
+                "kind=terms: 强赎/回售/下修条款+剩余期限 (集思录). "
+                "kind=history: 单只转债历史K线 daily/min (bond_zh_hs_cov_daily/min). "
+                "kind=issuer_finance: 发行人正股三大报表;城投/非上市发行人返回引导性提示。"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "kind": {"type": "string", "enum": ["overview", "terms", "history", "issuer_finance"], "description": "Query type"},
+                    "file_path": {"type": "string", "description": "Output CSV file path"},
+                    "symbol": {"type": "string", "description": "CB symbol e.g. sz128039 (history)"},
+                    "start_date": {"type": "string", "description": "Start date YYYY-MM-DD (history)"},
+                    "end_date": {"type": "string", "description": "End date YYYY-MM-DD (history)"},
+                    "period": {"type": "string", "enum": ["daily", "min"], "default": "daily", "description": "K-line period (history)"},
+                    "bond_code": {"type": "string", "description": "CB code (issuer_finance, mutually exclusive with stock_code)"},
+                    "stock_code": {"type": "string", "description": "Underlying stock code (issuer_finance, mutually exclusive with bond_code)"},
+                    "report_type": {"type": "string", "enum": ["资产负债表", "利润表", "现金流量表"], "default": "资产负债表", "description": "Financial report type (issuer_finance)"},
+                    "keyword": {"type": "string", "description": "Keyword filter (overview, optional)"},
+                },
+                "required": ["kind", "file_path"],
+            },
+        ),
     ]
 
 
@@ -110,6 +162,10 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             _, summary = query_worldbank(**arguments)
         elif name == "query_arxiv":
             _, summary = query_arxiv(**arguments)
+        elif name == "query_bond":
+            _, summary = query_bond(**arguments)
+        elif name == "query_convertible_bond":
+            _, summary = query_convertible_bond(**arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
         return [TextContent(type="text", text=summary)]
