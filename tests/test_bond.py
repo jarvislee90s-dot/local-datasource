@@ -27,3 +27,17 @@ def test_normalize_bond_code_invalid():
     from local_datasource.providers import bond
     with pytest.raises(ValueError):
         bond._normalize_bond_code("abc!@#")
+
+
+@pytest.mark.skipif(os.environ.get("SKIP_INTEGRATION"), reason="integration")
+def test_query_bond_yield_curve():
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
+        path = f.name
+    try:
+        file_path, summary = query_bond(
+            kind="yield_curve", start_date="2025-01-01", end_date="2025-06-30", file_path=path)
+        assert os.path.exists(file_path)
+        assert "Rows:" in summary
+        assert "Columns:" in summary
+    finally:
+        os.unlink(path)

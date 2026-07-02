@@ -32,6 +32,49 @@ def _normalize_bond_code(code: str) -> str:
     raise ValueError(f"Invalid bond code: {code}")
 
 
-def query_bond(*args, **kwargs) -> tuple[str, str]:
-    """查询中国境内债券数据并输出 CSV(将在 Task 2 中实现)。"""
-    raise NotImplementedError("query_bond implemented in Task 2")
+def _query_yield_curve(start_date: str, end_date: str) -> pd.DataFrame:
+    """国债到期收益率曲线(bond_china_yield)。"""
+    start_fmt = datetime.strptime(start_date, "%Y-%m-%d").strftime("%Y%m%d")
+    end_fmt = datetime.strptime(end_date, "%Y-%m-%d").strftime("%Y%m%d")
+    df = ak.bond_china_yield(start_date=start_fmt, end_date=end_fmt)
+    if df.empty:
+        raise ValueError(f"No yield curve data between {start_date} and {end_date}")
+    return df
+
+
+def _query_issue_info(bond_code: str) -> pd.DataFrame:
+    raise NotImplementedError("issue_info implemented in Task 3")
+
+
+def _query_credit_daily(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
+    raise NotImplementedError("credit_daily implemented in Task 4")
+
+
+def query_bond(
+    kind: BondKind,
+    file_path: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    bond_code: str | None = None,
+    symbol: str | None = None,
+) -> tuple[str, str]:
+    """查询中国境内债券数据并输出 CSV。"""
+    if kind == "yield_curve":
+        if not start_date or not end_date:
+            raise ValueError("yield_curve requires start_date and end_date")
+        df = _query_yield_curve(start_date, end_date)
+    elif kind == "issue_info":
+        if not bond_code:
+            raise ValueError("issue_info requires bond_code")
+        df = _query_issue_info(bond_code)
+    elif kind == "credit_daily":
+        if not symbol or not start_date or not end_date:
+            raise ValueError("credit_daily requires symbol, start_date, end_date")
+        df = _query_credit_daily(symbol, start_date, end_date)
+    else:
+        raise ValueError(f"Unsupported bond kind: {kind}")
+
+    if df.empty:
+        raise ValueError(f"No data returned for bond kind={kind}")
+
+    return format_csv_output(df, file_path)
