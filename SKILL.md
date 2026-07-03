@@ -12,7 +12,7 @@ compatibility: |
 
 # Local Datasource — Agent 执行手册
 
-本 skill 通过本地 MCP server 提供 6 个数据查询工具。Agent 的核心职责是：
+本 skill 通过本地 MCP server 提供 7 个数据查询工具。Agent 的核心职责是：
 **理解用户意图 → 选择合适工具 → 构造参数 → 解释返回结果**。
 数据的实际获取与 CSV 落盘由 MCP server 完成。
 
@@ -44,7 +44,28 @@ compatibility: |
 | arXiv 论文 | `query_arxiv` | 关键词、排序、max_results |
 | 国债收益率曲线 / 信用债发行信息 / 交易所行情 | `query_bond` | kind 分流，无需 key |
 | 可转债一览 / 条款 / 历史K线 / 发行人财务 | `query_convertible_bond` | kind 分流，发行人财务支持正股代码直查 |
+| 股票名称（简称/全称）→ 代码候选 | `resolve_stock_code` | 新浪 suggest API（支持全称反查），降级 akshare 全表简称；多候选择一再调 query_stock |
 | 多资产归一化对比 | 组合调用上述工具 → Agent 用 pandas/matplotlib 处理 | 见工作流 5 |
+
+## 输入归一化总则（重要）
+
+用户给金融标的时，可能贴代码、简称、全称或发行人名。Agent **调用 tool 前先按下表归一化输入**，不要把原始输入直接塞参数。
+
+| 品种 | 用户输入 | Agent 动作 |
+|---|---|---|
+| 股票 | 公司简称（如茅台） | `resolve_stock_code(keyword=简称)` → 候选 → 选代码 → `query_stock` |
+| 股票 | 公司全称（如贵州茅台酒股份有限公司） | `resolve_stock_code(keyword=全称)` → 新浪从关联字段提取代码；空则提示用户提供简称 |
+| 股票 | 已是代码（如 600519） | 直接 `query_stock` |
+| 可转债 | 某公司转债 | `query_convertible_bond(kind=overview, keyword=正股简称)` → 该公司转债 |
+| 可转债 | 转债代码 | 直接 `query_convertible_bond(kind=history, symbol=...)` |
+| 标债 | 发行人名（如成都东方广益） | `query_bond(kind=issue_info, bond_issue=发行人)` → 最新一只债代码 → 继续查 |
+| 标债 | 具体债代码/简称（如 2180495.IB） | `query_bond(kind=issue_info, bond_code=...)` |
+| 发行人财务 | 任意债代码/发行人名 | 先归一化到代码 → `query_convertible_bond(kind=issuer_finance, ...)` |
+
+**关键边界:**
+- 股票全称反查靠新浪 suggest API（从关联字段提取 sh/sz+6 位代码）；城投/非上市发行人无上市股票，返回空候选（正常），应提示用户。
+- 标债按发行人查只返回**最新一只**（按发行日期），非全部列表；需全部时让用户明确要求。
+- 银行间债（.IB）/交易所信用债的发行人若为城投/非上市，`issuer_finance` 返回引导性提示（免费层无财务）。
 
 ## 三、各工具详细规范
 
@@ -224,12 +245,14 @@ compatibility: |
 ### 可选参数
 
 - `start_date` / `end_date`（`YYYY-MM-DD`，yield_curve / credit_daily 必填）
-- `bond_code`（issue_info 必填，支持 `2180495.IB` / `2180495` 格式）
+- `bond_code`（issue_info 必填之一，如 `2180495.IB` / `2180495`，精确匹配单只）
+- `bond_issue`（issue_info 必填之一，发行人名如 `成都东方广益`，与 `bond_code` 互斥；返回最新一只债）
 - `symbol`（credit_daily 必填，如 `sh019623`）
 
 ### Agent 注意事项
 
 - `issue_info` 已做精确过滤，`2180495.IB` 只返回 1 条对应债券，不会误命中同号段存单（如 `112180495`）。
+- `issue_info` 的 `bond_code` 与 `bond_issue` 互斥；给发行人名时按发行日期降序返回最新一只债代码。
 - 国债收益率曲线返回各期限（1/3/5/7/10 年等）到期收益率。
 
 ### 已知限制
@@ -293,4 +316,16 @@ Agent 工作流：
 3. **第二步 — 发行人财务**：调 `query_convertible_bond(kind="issuer_finance", bond_code="2180495.IB")`。银行间债非转债 → 接口返回「非上市主体，免费层无财务数据，建议查 Wind/企业预警通」。
 4. **给用户完整反馈**：把基本信息 + 财务提示一起呈现，附上发行人真实名称，引导用户去 Wind 查财务。
 
-> 若用户贴的是发行人名称（如「成都东方广益投资有限公司」）而非债代码：先用 `query_bond(kind="issue_info", bond_code=...)` 无法按名查，应改用 `bond_info_cm` 的发行人检索能力（Agent 可提示用户提供债代码，或用关键字在 `query_bond` 的货币网返回里反查）。
+> 若用户贴的是发行人名称（如「成都东方广益投资有限公司」）而非债代码：直接调 `query_bond(kind="issue_info", bond_issue="成都东方广益")`，按发行日期降序返回最新一只债代码，再继续链路查基本信息/财务。
+
+## resolve_stock_code — 股票名称→代码
+
+### 必填参数
+- `keyword`：股票简称或全称（如 `茅台` / `贵州茅台酒股份有限公司`）
+- `file_path`：输出 CSV 路径
+
+### Agent 注意事项
+- 返回候选列表（代码+名称），多候选时择一再调 `query_stock`。
+- 首选新浪 suggest API：简称精确命中；全称从关联字段提取代码。
+- 城投/非上市发行人返回空候选（正常，因其无上市股票），应提示用户改用简称或直接给代码。
+- 新浪失败时降级 akshare `stock_zh_a_spot_em()` 全表按简称 contains（仅简称有效）。
