@@ -1,12 +1,13 @@
 """MCP Server 入口。
 
-注册 6 个数据查询 tool：
+注册 7 个数据查询 tool：
 - ``query_stock``：A 股 / 港股 / 美股
 - ``query_yfinance``：美股/全球资产（默认 akshare，可选 yfinance）
 - ``query_worldbank``：世界银行宏观指标
 - ``query_arxiv``：arXiv 学术论文
 - ``query_bond``：中国境内债券（国债收益率曲线/信用债发行信息/交易所行情）
 - ``query_convertible_bond``：可转债（一览/条款/历史K线/发行人财务）
+- ``resolve_stock_code``：股票名称（简称/全称）→ 代码候选
 
 通过标准 MCP stdio 协议与 Agent 通信。
 """
@@ -26,7 +27,7 @@ from local_datasource.config import load_config
 from local_datasource.providers.arxiv import query_arxiv
 from local_datasource.providers.bond import query_bond
 from local_datasource.providers.convertible_bond import query_convertible_bond
-from local_datasource.providers.stock import query_stock
+from local_datasource.providers.stock import query_stock, resolve_stock_code
 from local_datasource.providers.worldbank import query_worldbank
 from local_datasource.providers.yahoo import query_yfinance
 
@@ -114,7 +115,8 @@ def build_tools() -> list[Tool]:
                     "file_path": {"type": "string", "description": "Output CSV file path"},
                     "start_date": {"type": "string", "description": "Start date YYYY-MM-DD (yield_curve/credit_daily)"},
                     "end_date": {"type": "string", "description": "End date YYYY-MM-DD (yield_curve/credit_daily)"},
-                    "bond_code": {"type": "string", "description": "Bond code e.g. 2180495.IB or 2180495 (issue_info)"},
+                    "bond_code": {"type": "string", "description": "Bond code e.g. 2180495.IB or 2180495 (issue_info, mutually exclusive with bond_issue)"},
+                    "bond_issue": {"type": "string", "description": "Issuer name e.g. 成都东方广益 (issue_info, returns latest bond by issue date, mutually exclusive with bond_code)"},
                     "symbol": {"type": "string", "description": "Exchange bond symbol e.g. sh019623 (credit_daily)"},
                 },
                 "required": ["kind", "file_path"],
@@ -146,6 +148,23 @@ def build_tools() -> list[Tool]:
                 "required": ["kind", "file_path"],
             },
         ),
+        Tool(
+            name="resolve_stock_code",
+            description=(
+                "Resolve A-share stock code by company name (abbreviation or full name). "
+                "Output is written to file_path as CSV with candidate rows (代码+名称). "
+                "简称精确命中;全称能命中简称子串则返回;城投/非上市发行人返回空候选。"
+                "多候选时 Agent/用户从中选,再调 query_stock 查行情。"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "keyword": {"type": "string", "description": "Stock name or keyword, e.g. 茅台 / 贵州茅台酒股份有限公司"},
+                    "file_path": {"type": "string", "description": "Output CSV file path"},
+                },
+                "required": ["keyword", "file_path"],
+            },
+        ),
     ]
 
 
@@ -166,6 +185,8 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             _, summary = query_bond(**arguments)
         elif name == "query_convertible_bond":
             _, summary = query_convertible_bond(**arguments)
+        elif name == "resolve_stock_code":
+            _, summary = resolve_stock_code(**arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
         return [TextContent(type="text", text=summary)]
