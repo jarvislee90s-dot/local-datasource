@@ -60,6 +60,20 @@ def _query_issue_info(bond_code: str) -> pd.DataFrame:
     return df
 
 
+def _query_issue_info_by_issuer(issuer: str) -> pd.DataFrame:
+    """按发行人查,返回最新一只标债(按发行日期降序取首条)。
+
+    用户场景:给发行人名 → 拿到一个债券代码 → 链路继续查债信息/财务。
+    故只返回最新一只,不返回全部列表。
+    """
+    df = ak.bond_info_cm(bond_issue=issuer)
+    if df.empty:
+        raise ValueError(f"No bond found for issuer: {issuer}")
+    # 发行日期降序,取最新一只
+    df = df.sort_values("发行日期", ascending=False).head(1).copy()
+    return df
+
+
 def _query_credit_daily(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
     """信用债交易所历史日行情(bond_zh_hs_daily),按日期过滤。"""
     if not re.match(r"^(sh|sz)\d+$", symbol, re.IGNORECASE):
@@ -79,6 +93,7 @@ def query_bond(
     end_date: str | None = None,
     bond_code: str | None = None,
     symbol: str | None = None,
+    bond_issue: str | None = None,
 ) -> tuple[str, str]:
     """查询中国境内债券数据并输出 CSV。"""
     if kind == "yield_curve":
@@ -86,9 +101,14 @@ def query_bond(
             raise ValueError("yield_curve requires start_date and end_date")
         df = _query_yield_curve(start_date, end_date)
     elif kind == "issue_info":
-        if not bond_code:
-            raise ValueError("issue_info requires bond_code")
-        df = _query_issue_info(bond_code)
+        if bond_code and bond_issue:
+            raise ValueError("issue_info: bond_code 与 bond_issue 互斥")
+        if bond_code:
+            df = _query_issue_info(bond_code)
+        elif bond_issue:
+            df = _query_issue_info_by_issuer(bond_issue)
+        else:
+            raise ValueError("issue_info requires bond_code or bond_issue")
     elif kind == "credit_daily":
         if not symbol or not start_date or not end_date:
             raise ValueError("credit_daily requires symbol, start_date, end_date")
