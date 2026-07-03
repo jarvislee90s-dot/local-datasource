@@ -10,6 +10,7 @@ from typing import Literal
 
 import akshare as ak
 import pandas as pd
+import requests
 
 from local_datasource.formatters import format_csv_output
 
@@ -86,3 +87,82 @@ def query_stock(
         raise ValueError(f"No data returned for {ticker} ({market}) between {start_date} and {end_date}")
 
     return format_csv_output(df, file_path)
+
+
+def _resolve_via_sina(keyword: str) -> pd.DataFrame:
+    """用新浪 suggest API 按名称反查股票代码(支持简称与全称)。
+
+    新浪返回 GBK 编码,逗号分隔字段:[名称,类型,代码,带前缀代码,简称,...,关联字段]。
+    - 类型 11 = 股票;简称搜索时直接命中类型11行
+    - 全称搜索时,结果多为持有该股的基金(类型201),但每条关联字段含
+      ``sh600519|贵州茅台酒股份有限公司|权重``,从中提取 sh/sz+6位代码去重
+
+    返回 DataFrame(代码,名称),无结果返回空 DataFrame。
+    """
+    try:
+        r = requests.get(
+            "https://suggest3.sinajs.cn/suggest/type=",
+            params={"key": keyword},
+            timeout=10,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        r.encoding = "gbk"
+    except Exception:
+        return pd.DataFrame(columns=["代码", "名称"])
+
+    m = re.search(r'suggestvalue="(.*)"', r.text, re.S)
+    if not m or not m.group(1):
+        return pd.DataFrame(columns=["代码", "名称"])
+
+    rows = []
+    seen = set()
+    for cand in m.group(1).split(";"):
+        if not cand:
+            continue
+        parts = cand.split(",")
+        # parts[1]=类型, parts[2]=代码, parts[3]=带前缀代码, parts[4]=简称
+        typ = parts[1] if len(parts) > 1 else ""
+        prefix_code = parts[3] if len(parts) > 3 else ""
+        name = parts[4] if len(parts) > 4 else ""
+        # 类型11(股票)直接取
+        if typ == "11" and prefix_code and prefix_code not in seen:
+            seen.add(prefix_code)
+            rows.append({"代码": re.sub(r"^(sh|sz)", "", prefix_code),
+                         "名称": name})
+        # 全称场景:从最后含 | 的关联字段提取 sh/sz+6位代码
+        for field in parts:
+            mm = re.search(r"\b(sh|sz)(\d{6})\|", field)
+            if mm:
+                code = mm.group(2)
+                if code not in seen:
+                    seen.add(code)
+                    rows.append({"代码": code, "名称": name})
+    return pd.DataFrame(rows, columns=["代码", "名称"]) if rows else pd.DataFrame(columns=["代码", "名称"])
+
+
+def resolve_stock_code(keyword: str, file_path: str) -> tuple[str, str]:
+    """股票名称(简称或全称)→ 代码候选列表,输出 CSV。
+
+    首选新浪 suggest API(支持全称反查);新浪失败或无结果时降级
+    akshare ``stock_zh_a_spot_em()`` 全表按简称 contains 匹配(仅简称有效)。
+    - 简称(如"茅台")→ 新浪类型11直接命中
+    - 全称(如"贵州茅台酒股份有限公司")→ 新浪从关联字段提取代码
+    - 城投/非上市发行人 → 候选为空(不报错)
+
+    多候选时返回全部,Agent/用户从中选,再调 ``query_stock`` 查行情。
+    """
+    if not keyword:
+        raise ValueError("resolve_stock_code requires keyword")
+
+    # 首选新浪
+    result = _resolve_via_sina(keyword)
+    if result.empty:
+        # 降级:akshare 全表按简称 contains
+        try:
+            df = ak.stock_zh_a_spot_em()
+            if not df.empty:
+                mask = df["名称"].astype(str).str.contains(keyword, na=False, regex=False)
+                result = df[mask][["代码", "名称"]].copy()
+        except Exception:
+            pass
+    return format_csv_output(result, file_path)
