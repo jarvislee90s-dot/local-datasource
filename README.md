@@ -31,7 +31,7 @@
 ## 核心特点
 
 - ✅ **A股 / 港股 / 美股**：日线行情，支持前复权/后复权。
-- ✅ **美股 / ETF / 全球资产**：默认 `akshare` 美股接口，可回退 `yfinance`。
+- ✅ **美股 / 美股 ETF / 全球资产**：默认 `akshare` 美股接口，可回退 `yfinance`（A股场内 ETF 见 `query_etf`）。
 - ✅ **世界银行宏观指标**：GDP、CPI、人口等。
 - ✅ **arXiv 论文搜索**：标题、作者、摘要、PDF 链接结构化输出。
 - ✅ **中国境内债券**：国债收益率曲线、信用债发行信息（按代码或发行人查）、交易所行情。
@@ -86,7 +86,7 @@ local-datasource
 | 数据类型 | 工具 | 底层接口 | 是否需 API Key |
 |---|---|---|---|
 | A股（日线/分钟）/ 港股 / 美股 历史行情 | `query_stock` | `akshare` | 否 |
-| 美股 / ETF / 全球资产 | `query_yfinance` | `akshare`（默认）/ `yfinance`（备选） | 否 |
+| 美股 / 美股 ETF / 全球资产 | `query_yfinance` | `akshare`（默认）/ `yfinance`（备选） | 否 |
 | 世界银行宏观指标 | `query_worldbank` | `wbgapi` | 否 |
 | arXiv 学术论文 | `query_arxiv` | `arxiv` | 否 |
 | 中国境内债券（国债收益率曲线/信用债发行信息/交易所行情） | `query_bond` | `akshare` | 否 |
@@ -136,6 +136,7 @@ akshare / yfinance / wbgapi / arxiv
 .
 ├── SKILL.md                        # Agent 执行手册
 ├── README.md                       # 项目介绍（本文档）
+├── CHANGELOG.md                    # 里程碑变更记录
 ├── pyproject.toml                  # Python 包配置与依赖
 ├── config.yaml                     # 可选配置文件
 ├── src/local_datasource/           # MCP server 源码
@@ -532,7 +533,7 @@ python -m pytest tests/ -v
 | 运行位置 | 本机 | Kimi Code 云端 |
 | 登录/账号 | 不需要 | 需要 Kimi Code 账号 |
 | 费用 | 免费（受公开接口限额影响） | 消耗 Kimi Code 额度 |
-| 数据源 | A/HK/US 股票、美股/ETF、World Bank、arXiv | 更多，包括天眼查、Google Scholar、元典法律等 |
+| 数据源 | A/HK/US 股票、境内债券/可转债、期货、指数、A股 ETF、期权、美股/全球资产、World Bank、arXiv | 更多，包括天眼查、Google Scholar、元典法律等 |
 | 数据链路 | Agent → 本地 Server → 公开接口 | Agent → Kimi 云服务 → 后端数据源 |
 | 可定制性 | 源码本地可见，可修改/扩展 | 黑盒，只能使用官方暴露的 tool |
 | 跨 Agent 复用 | 标准 MCP Server，可被多家 Agent 复用 | 仅限 Kimi Code 内部 |
