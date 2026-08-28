@@ -17,16 +17,19 @@ EtfPeriod = Literal["daily", "min"]
 
 
 def _normalize_etf_code(symbol: str) -> str:
-    """ETF 代码归一为 ``sh/sz + 6 位``:``5`` 开头沪市,``1`` 开头(15x/16x)深市。"""
+    """ETF 代码归一为 ``sh/sz + 6 位``:``5`` 开头沪市,``15x/16x`` 深市。
+
+    带前缀输入剥前缀后走同一套数字段校验(数字段为准,前缀冲突自动纠正);
+    非 ETF 数字段(股票/转债)立即拒绝。
+    """
     s = re.sub(r"\.(sh|sz)$", "", str(symbol).strip(), flags=re.IGNORECASE).lower()
     m = re.fullmatch(r"(sh|sz)(\d{6})", s)
-    if m:
-        return s
-    if re.fullmatch(r"\d{6}", s):
-        if s.startswith("5"):
-            return f"sh{s}"
-        if s.startswith(("15", "16")):
-            return f"sz{s}"
+    digits = m.group(2) if m else s
+    if re.fullmatch(r"\d{6}", digits):
+        if digits.startswith("5"):
+            return f"sh{digits}"
+        if digits.startswith(("15", "16")):
+            return f"sz{digits}"
         raise ValueError(f"Not an ETF code (ETF: 5 开头沪市 / 15x·16x 深市): {symbol}")
     raise ValueError(f"Invalid ETF code: {symbol}(示例: 510300 / sh510300)")
 

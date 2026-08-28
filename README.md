@@ -98,7 +98,7 @@ local-datasource
 - **标债**：发行人名 → `query_bond(kind=issue_info, bond_issue=...)` → 最新一只债代码 → 继续查基本信息/财务
 - **可转债**：正股简称 → `query_convertible_bond(kind=overview, keyword=...)` → 该公司转债
 - **发行人财务**：任意债代码/发行人名 → 先归一化到代码 → `query_convertible_bond(kind=issuer_finance, ...)`
-- **期货**：直接给合约/主连代码（`IM2612`/`IM0`/`IM主连` 自动归一）；查挂牌合约用 `query_futures(kind=contracts, symbol=品种如IM)`
+- **期货**：直接给合约/主连代码（`IM2612`/`IM0`/`IM主连` 自动归一）；查挂牌合约用 `query_futures(kind=contracts, symbol=品种如IM)`（合约清单走交易所官方挂牌表，DCE/GFEX 品种忽略 `trade_date`，返回当前挂牌）
 - **指数**：`000852`/`sh000300` 自动补交易所前缀走新浪；中证系列 `930xxx/950xxx` 自动走中证官网源（慢约 10 秒，无分钟）
 - **ETF**：`510300` 按首位自动补 `sh`/`sz` 前缀
 - **期权**：先 `query_options(kind=months/contracts, underlying=...)` 拿到期月份/合约代码，再 `kind=hist` 查日线；合约代码宽容格式（`IO2706-P-5600` 与 `io2706p5600` 等价）
@@ -497,7 +497,7 @@ LOCAL_DATASOURCE_CONFIG=/path/to/config.yaml local-datasource
 python -m pytest tests/ -v
 ```
 
-包含配置加载、格式化、6 个 provider 的集成测试、MCP server 工具注册（11 个 tool）。
+包含配置加载、格式化、10 个 provider 的集成测试、MCP server 工具注册（11 个 tool）。
 
 ---
 

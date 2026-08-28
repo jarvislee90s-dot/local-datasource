@@ -193,7 +193,7 @@ def build_tools() -> list[Tool]:
                     "freq": {"type": "string", "enum": ["1", "5", "15", "30", "60"], "default": "1", "description": "Minute granularity (period=min)"},
                     "start_date": {"type": "string", "description": "Start date YYYY-MM-DD"},
                     "end_date": {"type": "string", "description": "End date YYYY-MM-DD"},
-                    "trade_date": {"type": "string", "description": "Trade date YYYY-MM-DD (contracts, default today)"},
+                    "trade_date": {"type": "string", "description": "Trade date YYYY-MM-DD (contracts, default today; DCE/GFEX 品种忽略此参数,返回当前挂牌)"},
                 },
                 "required": ["symbol", "file_path"],
             },

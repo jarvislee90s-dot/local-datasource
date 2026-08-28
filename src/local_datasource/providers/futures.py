@@ -59,6 +59,11 @@ def _normalize_futures_code(symbol: str) -> str:
         return m.group(1) + "0"
     if re.fullmatch(r"[A-Z]{1,2}\d{3,4}", s):
         return s
+    if re.fullmatch(r"[A-Z]{1,2}", s):
+        raise ValueError(
+            f"Unrecognized futures code: {symbol}"
+            f"(品种代码请配 kind=contracts 查挂牌合约;行情请给合约如 IM2612 或主连 IM0)"
+        )
     raise ValueError(f"Unrecognized futures code: {symbol}(示例: IM2612 / IM0)")
 
 
@@ -100,8 +105,11 @@ def _query_hist_minute(code: str, freq: str, start_date: str, end_date: str) -> 
     return df
 
 
-def _query_contracts(variety: str, trade_date: str | None) -> pd.DataFrame:
-    """交易所官方挂牌表按品种前缀过滤;列名随 akshare 版本可能有差异,做候选列匹配。"""
+def fetch_contracts(variety: str, trade_date: str | None) -> pd.DataFrame:
+    """交易所官方挂牌表按品种前缀过滤;期权 provider(IO/HO/MO)复用同一实现。
+
+    列名随 akshare 版本可能有差异,做候选列匹配。
+    """
     exch = _exchange_of_variety(variety)
     df = _CONTRACT_INFO_APIS[exch](to_compact_date(trade_date))
     code_col = next((c for c in ("合约代码", "代码", "symbol") if c in df.columns), None)
@@ -137,7 +145,7 @@ def query_futures(
         variety = re.match(r"^[A-Za-z]+", str(symbol).strip())
         if not variety:
             raise ValueError(f"kind=contracts 需要品种代码(如 IM/RB),got: {symbol}")
-        df = _query_contracts(variety.group(0), trade_date)
+        df = fetch_contracts(variety.group(0), trade_date)
     elif kind == "hist":
         code = _normalize_futures_code(symbol)
         if period == "daily":

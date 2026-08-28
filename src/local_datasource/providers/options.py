@@ -14,7 +14,8 @@ import akshare as ak
 import pandas as pd
 
 from local_datasource.formatters import format_csv_output
-from local_datasource.providers.common import filter_by_date, to_compact_date
+from local_datasource.providers.common import filter_by_date
+from local_datasource.providers.futures import fetch_contracts
 
 
 OptionKind = Literal["months", "contracts", "hist"]
@@ -102,12 +103,8 @@ def _query_contracts(underlying: str, trade_date: str | None) -> pd.DataFrame:
         near = pd.to_datetime(df["到期日"]).min().strftime("%Y-%m")
         df = df[pd.to_datetime(df["到期日"]).dt.strftime("%Y-%m") == near].copy()
         return df
-    # CFFEX:交易所官方挂牌表(期货/期权同表),按品种前缀过滤
-    df = ak.futures_contract_info_cffex(date=to_compact_date(trade_date))
-    out = df[df["合约代码"].astype(str).str.upper().str.match(rf"^{u}\d")].copy()
-    if out.empty:
-        raise ValueError(f"No contracts matched underlying: {u}")
-    return out
+    # CFFEX:交易所官方挂牌表(期货/期权同表),复用 futures 的品种过滤实现(含空表/列名守卫)
+    return fetch_contracts(u, trade_date)
 
 
 def _query_hist(symbol: str, start_date: str | None, end_date: str | None) -> pd.DataFrame:
