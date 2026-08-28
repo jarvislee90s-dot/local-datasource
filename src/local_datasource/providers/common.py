@@ -14,6 +14,8 @@ import pandas as pd
 
 def filter_by_date(df: pd.DataFrame, start_date: str, end_date: str, date_col: str = "date") -> pd.DataFrame:
     """把日期列统一为 ``YYYY-MM-DD`` 字符串后按闭区间过滤。"""
+    if df.empty or date_col not in df.columns:
+        return df.iloc[0:0]
     df = df.copy()
     df[date_col] = pd.to_datetime(df[date_col]).dt.strftime("%Y-%m-%d")
     return df[(df[date_col] >= start_date) & (df[date_col] <= end_date)].copy()
@@ -21,6 +23,8 @@ def filter_by_date(df: pd.DataFrame, start_date: str, end_date: str, date_col: s
 
 def filter_by_datetime(df: pd.DataFrame, start_date: str, end_date: str, dt_col: str = "datetime") -> pd.DataFrame:
     """把 datetime 列(``YYYY-MM-DD HH:MM:SS``)取日期部分后按闭区间过滤。"""
+    if df.empty or dt_col not in df.columns:
+        return df.iloc[0:0]
     df = df.copy()
     day = pd.to_datetime(df[dt_col]).dt.strftime("%Y-%m-%d")
     return df[(day >= start_date) & (day <= end_date)].copy()
