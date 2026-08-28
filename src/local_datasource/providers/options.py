@@ -1,6 +1,6 @@
 """期权 provider:ETF 期权(上交所)+ 股指期权(中金所 IO/HO/MO),本轮仅日线。
 
-- months:到期月份清单(SSE list / CFFEX list)
+- months:到期月份清单(SSE 官方当日表统一推导 / CFFEX list)
 - contracts:当月合约清单(CFFEX 用交易所官方挂牌表;SSE 用上交所官方当日全表,
   akshare 的 option_sse_codes_sina 在 1.18.64 有解析 bug,不依赖)
 - hist:单合约日线(SSE 8 位码 / CFFEX io2609C4200 格式)
@@ -69,11 +69,26 @@ def _check_underlying(underlying: str | None) -> str:
     return u
 
 
+def _sse_underlying_rows(underlying: str) -> pd.DataFrame:
+    """上交所官方当日全表按 6 位标的代码锚定过滤(months 与 contracts 共用)。"""
+    df = ak.option_current_day_sse()
+    if "标的券名称及代码" not in df.columns or "到期日" not in df.columns:
+        raise ValueError("上交所官方合约表列名不符,请检查 akshare 版本")
+    codes = df["标的券名称及代码"].astype(str).str.extract(r"\((\d{6})\)")[0]
+    df = df[codes.isin(_SSE_LABEL_CODES[underlying])].copy()
+    if df.empty:
+        raise ValueError(f"No contracts matched underlying: {underlying}")
+    return df
+
+
 def _query_months(underlying: str) -> pd.DataFrame:
     u = _check_underlying(underlying)
     if u in _SSE_UNDERLYINGS:
-        months = ak.option_sse_list_sina(symbol=u)
-        return pd.DataFrame({"标的": u, "到期月份": list(months)})
+        # 官方当日表锚定标的代码取唯一到期月:四个标的统一路径,
+        # 不依赖新浪关键字接口(其文档仅声明支持 50ETF/300ETF)
+        df = _sse_underlying_rows(u)
+        months = sorted(pd.to_datetime(df["到期日"]).dt.strftime("%Y%m").unique())
+        return pd.DataFrame({"标的": u, "到期月份": months})
     raw = getattr(ak, _CFFEX_LIST_FUNCS[u])()
     codes = next(iter(raw.values()), [])
     months = sorted({f"20{re.sub(r'^[a-z]+', '', c)}" for c in codes})
@@ -83,14 +98,7 @@ def _query_months(underlying: str) -> pd.DataFrame:
 def _query_contracts(underlying: str, trade_date: str | None) -> pd.DataFrame:
     u = _check_underlying(underlying)
     if u in _SSE_UNDERLYINGS:
-        df = ak.option_current_day_sse()
-        if "标的券名称及代码" not in df.columns or "到期日" not in df.columns:
-            raise ValueError("上交所官方合约表列名不符,请检查 akshare 版本")
-        codes = df["标的券名称及代码"].astype(str).str.extract(r"\((\d{6})\)")[0]
-        mask = codes.isin(_SSE_LABEL_CODES[u])
-        df = df[mask].copy()
-        if df.empty:
-            raise ValueError(f"No contracts matched underlying: {u}")
+        df = _sse_underlying_rows(u)
         near = pd.to_datetime(df["到期日"]).min().strftime("%Y-%m")
         df = df[pd.to_datetime(df["到期日"]).dt.strftime("%Y-%m") == near].copy()
         return df

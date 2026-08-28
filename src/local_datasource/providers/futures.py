@@ -35,7 +35,8 @@ _VARIETY_EXCHANGE: dict[str, list[str]] = {
     "DCE": ["A", "B", "M", "Y", "P", "C", "CS", "JD", "L", "V", "PP", "J", "JM", "I",
             "EG", "EB", "PG", "RR", "LH"],
     "CZCE": ["WH", "PM", "RI", "RS", "JR", "LR", "OI", "RM", "CF", "CY", "SR", "TA",
-             "MA", "FG", "SA", "UR", "PF", "SH", "PX"],
+             "MA", "FG", "SA", "UR", "PF", "SH", "PX",
+             "AP", "CJ", "PK", "PL", "PR", "SF", "SM", "ZC"],
     "INE": ["SC", "NR", "EC"],
     "GFEX": ["SI", "LC", "PS"],
 }
@@ -137,7 +138,7 @@ def query_futures(
         if not variety:
             raise ValueError(f"kind=contracts 需要品种代码(如 IM/RB),got: {symbol}")
         df = _query_contracts(variety.group(0), trade_date)
-    else:
+    elif kind == "hist":
         code = _normalize_futures_code(symbol)
         if period == "daily":
             df = _query_hist_daily(code, start_date, end_date)
@@ -147,6 +148,8 @@ def query_futures(
             df = _query_hist_minute(code, freq, start_date, end_date)
         else:
             raise ValueError(f"Unsupported period: {period}, use 'daily' or 'min'")
+    else:
+        raise ValueError(f"Unsupported futures kind: {kind}, use 'hist' or 'contracts'")
 
     if df.empty:
         raise ValueError(f"No data returned for futures kind={kind}")
