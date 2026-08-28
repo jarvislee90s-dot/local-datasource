@@ -13,7 +13,7 @@ import pandas as pd
 import requests
 
 from local_datasource.formatters import format_csv_output
-from local_datasource.providers.common import filter_by_date
+from local_datasource.providers.common import fetch_tencent_minute, filter_by_date
 
 
 Market = Literal["a", "hk", "us"]
@@ -48,6 +48,8 @@ def query_stock(
     end_date: str,
     file_path: str,
     adjust: str = "qfq",
+    period: str = "daily",
+    freq: str = "1",
 ) -> tuple[str, str]:
     """查询指定市场的股票历史行情并输出 CSV。
 
@@ -57,8 +59,19 @@ def query_stock(
         start_date: 开始日期 ``YYYY-MM-DD``
         end_date: 结束日期 ``YYYY-MM-DD``
         file_path: 输出 CSV 路径
-        adjust: 复权方式，``qfq`` / ``hfq`` / ``none``
+        adjust: 复权方式(仅 daily),``qfq`` / ``hfq`` / ``none``
+        period: ``daily`` 默认 / ``min``(仅 A 股,腾讯源约 8 个交易日)
+        freq: 分钟粒度 1/5/15/30/60,默认 1
     """
+    if period == "min":
+        if market != "a":
+            raise ValueError("period=min 仅支持 A 股(腾讯源),港股/美股请用 period=daily")
+        if not start_date or not end_date:
+            raise ValueError("period=min 需提供 start_date 与 end_date(分钟深度有限,用于覆盖校验)")
+        symbol = _normalize_a_code(ticker)
+        df = fetch_tencent_minute(symbol, freq, start_date, end_date)
+        return format_csv_output(df, file_path)
+
     # akshare 部分接口需要 ``YYYYMMDD`` 格式的日期字符串
     start_fmt = datetime.strptime(start_date, "%Y-%m-%d").strftime("%Y%m%d")
     end_fmt = datetime.strptime(end_date, "%Y-%m-%d").strftime("%Y%m%d")
