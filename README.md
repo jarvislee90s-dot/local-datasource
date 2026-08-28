@@ -6,7 +6,7 @@
 
 ## 一句话介绍
 
-`local-datasource` 把 `akshare`、`yfinance`、`wbgapi`、`arxiv` 等免费公开接口封装成 7 个标准 MCP tool，Agent 只需要像调用本地函数一样请求数据，即可获得结构化 CSV 输出。
+`local-datasource` 把 `akshare`、`yfinance`、`wbgapi`、`arxiv` 等免费公开接口封装成 11 个标准 MCP tool，Agent 只需要像调用本地函数一样请求数据，即可获得结构化 CSV 输出。
 
 ---
 
@@ -76,13 +76,17 @@ local-datasource
 
 | 数据类型 | 工具 | 底层接口 | 是否需 API Key |
 |---|---|---|---|
-| A股 / 港股 / 美股 历史行情 | `query_stock` | `akshare` | 否 |
+| A股（日线/分钟）/ 港股 / 美股 历史行情 | `query_stock` | `akshare` | 否 |
 | 美股 / ETF / 全球资产 | `query_yfinance` | `akshare`（默认）/ `yfinance`（备选） | 否 |
 | 世界银行宏观指标 | `query_worldbank` | `wbgapi` | 否 |
 | arXiv 学术论文 | `query_arxiv` | `arxiv` | 否 |
 | 中国境内债券（国债收益率曲线/信用债发行信息/交易所行情） | `query_bond` | `akshare` | 否 |
 | 可转债（一览/条款/历史K线/发行人财务） | `query_convertible_bond` | `akshare` | 否 |
 | 股票名称（简称/全称）→ 代码候选 | `resolve_stock_code` | 新浪 suggest API / `akshare` | 否 |
+| 国内期货（单合约/主连行情、合约清单） | `query_futures` | `akshare`（新浪/交易所官方） | 否 |
+| 国内指数（沪深/中证系列，日线/分钟） | `query_index` | `akshare`（新浪/腾讯/中证官网） | 否 |
+| A股场内 ETF（日线/分钟） | `query_etf` | `akshare`（新浪/腾讯） | 否 |
+| 期权（ETF期权/股指期权：月份/清单/日线） | `query_options` | `akshare`（新浪/上交所/CFFEX） | 否 |
 
 ---
 
@@ -94,6 +98,10 @@ local-datasource
 - **标债**：发行人名 → `query_bond(kind=issue_info, bond_issue=...)` → 最新一只债代码 → 继续查基本信息/财务
 - **可转债**：正股简称 → `query_convertible_bond(kind=overview, keyword=...)` → 该公司转债
 - **发行人财务**：任意债代码/发行人名 → 先归一化到代码 → `query_convertible_bond(kind=issuer_finance, ...)`
+- **期货**：直接给合约/主连代码（`IM2612`/`IM0`/`IM主连` 自动归一）；查挂牌合约用 `query_futures(kind=contracts, symbol=品种如IM)`
+- **指数**：`000852`/`sh000300` 自动补交易所前缀走新浪；中证系列 `930xxx/950xxx` 自动走中证官网源（慢约 10 秒，无分钟）
+- **ETF**：`510300` 按首位自动补 `sh`/`sz` 前缀
+- **期权**：先 `query_options(kind=months/contracts, underlying=...)` 拿到期月份/合约代码，再 `kind=hist` 查日线；合约代码宽容格式（`IO2706-P-5600` 与 `io2706p5600` 等价）
 
 城投/非上市发行人无上市股票，`resolve_stock_code` 返回空候选；其债券的 `issuer_finance` 返回引导性提示（免费层无财务，建议查 Wind/企业预警通）。
 
@@ -381,6 +389,61 @@ Tool：`query_convertible_bond`（kind=`issuer_finance`，`bond_code`/`stock_cod
 
 Tool：`resolve_stock_code`（首选新浪 suggest API，简称精确命中、全称从关联字段提取代码；城投/非上市发行人返回空候选；多候选时择一再调 `query_stock`）
 
+### 查询期货：IM 主连日线
+
+```json
+{
+  "symbol": "IM0",
+  "period": "daily",
+  "start_date": "2026-06-01",
+  "end_date": "2026-08-28",
+  "file_path": "/tmp/im_main.csv"
+}
+```
+
+Tool：`query_futures`（单合约改 `symbol: IM2612` 得全历史；分钟加 `period: min`，深度约 4 个交易日，超覆盖报错并给补数指引）
+
+### 查询指数：中证1000 日线
+
+```json
+{
+  "symbol": "000852",
+  "period": "daily",
+  "start_date": "2014-10-17",
+  "end_date": "2026-08-28",
+  "file_path": "/tmp/csi1000.csv"
+}
+```
+
+Tool：`query_index`（中证系列 `930xxx` 走中证官网源，慢约 10 秒、无分钟数据）
+
+### 查询 ETF：沪深300ETF 分钟
+
+```json
+{
+  "symbol": "510300",
+  "period": "min",
+  "freq": "1",
+  "start_date": "2026-08-25",
+  "end_date": "2026-08-27",
+  "file_path": "/tmp/etf_min.csv"
+}
+```
+
+Tool：`query_etf`（日线去 `period/freq` 加日期区间；日线源无复权）
+
+### 查询期权：IO 到期月份 → 单合约日线
+
+```json
+{
+  "kind": "months",
+  "underlying": "IO",
+  "file_path": "/tmp/io_months.csv"
+}
+```
+
+Tool：`query_options`（合约清单 `kind: contracts`；日线 `kind: hist, symbol: "IO2706-P-5600"`）
+
 ---
 
 参考 `demos/mcp_query_demo.py`：它通过 MCP 调用多个工具，读取生成的 CSV，计算归一化价格，并绘制对比图。
@@ -434,7 +497,7 @@ LOCAL_DATASOURCE_CONFIG=/path/to/config.yaml local-datasource
 python -m pytest tests/ -v
 ```
 
-包含配置加载、格式化、6 个 provider 的集成测试、MCP server 工具注册（7 个 tool）。
+包含配置加载、格式化、6 个 provider 的集成测试、MCP server 工具注册（11 个 tool）。
 
 ---
 
