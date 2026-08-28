@@ -12,6 +12,15 @@ import akshare as ak
 import pandas as pd
 
 
+class CoverageError(ValueError):
+    """分钟深度不足:请求区间早于数据源实际覆盖。
+
+    独立类型便于消费方(如 quant-chart)精确捕获并触发自己的补数流程;
+    继承 ValueError,存量 ``except ValueError`` 行为不变。
+    message 固定含覆盖区间(``YYYY-MM-DD``)与"补数"指引。
+    """
+
+
 def filter_by_date(
     df: pd.DataFrame,
     start_date: str | None = None,
@@ -67,7 +76,7 @@ def guard_minute_depth(df: pd.DataFrame, start_date: str, dt_col: str = "datetim
     earliest = times.min().strftime("%Y-%m-%d")
     latest = times.max().strftime("%Y-%m-%d")
     if start_date < earliest:
-        raise ValueError(
+        raise CoverageError(
             f"分钟数据仅覆盖 {earliest} 至 {latest}(源: {source}),"
             f"更早区间请从 Wind/终端导出 Excel 提供补数"
         )
