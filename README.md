@@ -36,6 +36,11 @@
 - ✅ **arXiv 论文搜索**：标题、作者、摘要、PDF 链接结构化输出。
 - ✅ **中国境内债券**：国债收益率曲线、信用债发行信息（按代码或发行人查）、交易所行情。
 - ✅ **可转债**：一览含溢价率、强赎/回售条款、历史K线、发行人正股财务报表。
+- ✅ **国内期货**：单合约（全历史）/主连日线与分钟、品种挂牌合约清单。
+- ✅ **国内指数**：沪深指数（2014 起）与中证系列日线，沪深指数分钟。
+- ✅ **A股场内 ETF**：日线（2012 起全历史）与分钟。
+- ✅ **期权**：ETF 期权与股指期权（IO/HO/MO）的到期月份、合约清单、单合约日线。
+- ✅ **A股个股分钟**：`query_stock(period=min)`，与日线同一入口。
 - ✅ **金融输入归一化**：股票/债券的名称、简称、全称、发行人 → 统一代码（`resolve_stock_code` + `bond_issue`）。
 - ✅ **统一 CSV 输出**：每个 tool 都把结果写到 `file_path`，并返回前 5 行预览。
 - ✅ **零 API Key**：所有默认数据源均免费使用。
@@ -53,8 +58,12 @@
 
 ## 快速开始
 
+要求：Python >= 3.10。
+
 ```bash
 # 1. 克隆并安装
+git clone https://github.com/jarvislee90s-dot/local-datasource.git
+cd local-datasource
 pip install -e .
 
 # 2. 启动 MCP 服务
@@ -116,7 +125,7 @@ local-datasource（本仓库）
         ↓ 直接调用
 akshare / yfinance / wbgapi / arxiv
         ↓ 原始数据源
-同花顺 / Yahoo Finance / World Bank / arxiv.org
+新浪 / 腾讯 / 交易所官网 / 中证指数 / 同花顺 / Yahoo Finance / World Bank / arxiv.org
 ```
 
 ---
@@ -134,12 +143,17 @@ akshare / yfinance / wbgapi / arxiv
 │   ├── config.py                   # 加载 config.yaml / 环境变量
 │   ├── formatters.py               # 统一 CSV 输出与预览
 │   └── providers/                  # 各数据源适配器
-│       ├── stock.py                # A/HK/US 股票 + resolve_stock_code 名称反查
+│       ├── common.py               # 共享工具：日期过滤、分钟深度守卫、腾讯分钟路径
+│       ├── stock.py                # A/HK/US 股票（日线/A股分钟）+ resolve_stock_code 名称反查
 │       ├── yahoo.py                # 美股/全球资产
 │       ├── worldbank.py            # 世界银行
 │       ├── arxiv.py                # arXiv 论文
 │       ├── bond.py                 # 中国境内债券（国债收益率/信用债发行/交易所行情）
-│       └── convertible_bond.py     # 可转债（一览/条款/历史K线/发行人财务）
+│       ├── convertible_bond.py     # 可转债（一览/条款/历史K线/发行人财务）
+│       ├── futures.py              # 国内期货（行情/合约清单）
+│       ├── index.py                # 国内指数（沪深/中证系列）
+│       ├── etf.py                  # A股场内 ETF
+│       └── options.py              # 期权（ETF/股指：月份/清单/日线）
 └── demos/                          # 示例脚本
     └── mcp_query_demo.py           # 多资产查询 + 归一化走势图
 ```
@@ -503,6 +517,8 @@ python -m pytest tests/ -v
 
 ## 注意事项
 
+- **分钟数据深度有限**（免费源天花板）：期货分钟约 4 个交易日，腾讯源（个股/指数/ETF）约 8 个交易日。请求区间超出覆盖时会**明确报错并提示从 Wind/终端导出 Excel 补数**，不会静默返回残缺数据。
+- **慢源与已知限制**：中证系列指数日线走中证官网（约 10 秒，无分钟）；期货主连仅约 158 日；ETF 日线无复权（原始价）；期权仅日线。
 - `yfinance` 容易被 Yahoo Finance 限流，因此默认优先使用 `akshare`。
 - `akshare` 的接口可能随时间变化，建议定期更新到较新版本。
 - World Bank 和 arXiv 通常稳定且无需 API key。
