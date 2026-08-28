@@ -12,22 +12,48 @@ import akshare as ak
 import pandas as pd
 
 
-def filter_by_date(df: pd.DataFrame, start_date: str, end_date: str, date_col: str = "date") -> pd.DataFrame:
-    """把日期列统一为 ``YYYY-MM-DD`` 字符串后按闭区间过滤。"""
+def filter_by_date(
+    df: pd.DataFrame,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    date_col: str = "date",
+) -> pd.DataFrame:
+    """把日期列统一为 ``YYYY-MM-DD`` 字符串后按闭区间过滤;边界为 None 表示该侧不设限。"""
     if df.empty or date_col not in df.columns:
         return df.iloc[0:0]
     df = df.copy()
     df[date_col] = pd.to_datetime(df[date_col]).dt.strftime("%Y-%m-%d")
-    return df[(df[date_col] >= start_date) & (df[date_col] <= end_date)].copy()
+    start = start_date or "0001-01-01"
+    end = end_date or "9999-12-31"
+    return df[(df[date_col] >= start) & (df[date_col] <= end)]
 
 
-def filter_by_datetime(df: pd.DataFrame, start_date: str, end_date: str, dt_col: str = "datetime") -> pd.DataFrame:
-    """把 datetime 列(``YYYY-MM-DD HH:MM:SS``)取日期部分后按闭区间过滤。"""
+def filter_by_datetime(
+    df: pd.DataFrame,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    dt_col: str = "datetime",
+) -> pd.DataFrame:
+    """把 datetime 列(``YYYY-MM-DD HH:MM:SS``)取日期部分后按闭区间过滤;None 表示不设限。"""
     if df.empty or dt_col not in df.columns:
         return df.iloc[0:0]
     df = df.copy()
     day = pd.to_datetime(df[dt_col]).dt.strftime("%Y-%m-%d")
-    return df[(day >= start_date) & (day <= end_date)].copy()
+    start = start_date or "0001-01-01"
+    end = end_date or "9999-12-31"
+    return df[(day >= start) & (day <= end)]
+
+
+def validate_period(period: str) -> None:
+    """统一校验 period 枚举,非法值报错而非静默按 daily。"""
+    if period not in ("daily", "min"):
+        raise ValueError(f"Unsupported period: {period}, use 'daily' or 'min'")
+
+
+def require_minute_range(start_date: str | None, end_date: str | None) -> None:
+    """分钟模式必须提供起止日期(深度有限,用于覆盖校验)。"""
+    if not start_date or not end_date:
+        raise ValueError("period=min 需提供 start_date 与 end_date(分钟深度有限,用于覆盖校验)")
 
 
 def guard_minute_depth(df: pd.DataFrame, start_date: str, dt_col: str = "datetime", source: str = "腾讯") -> None:

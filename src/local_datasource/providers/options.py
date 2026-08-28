@@ -118,11 +118,7 @@ def _query_hist(symbol: str, start_date: str | None, end_date: str | None) -> pd
         date_col = "date"
     if df.empty:
         raise ValueError(f"No history for option {symbol}")
-    if start_date or end_date:
-        return filter_by_date(
-            df, start_date or "0001-01-01", end_date or "9999-12-31", date_col=date_col
-        )
-    return df
+    return filter_by_date(df, start_date, end_date, date_col=date_col)
 
 
 def query_options(

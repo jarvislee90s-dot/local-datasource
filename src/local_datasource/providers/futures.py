@@ -20,7 +20,9 @@ from local_datasource.providers.common import (
     filter_by_date,
     filter_by_datetime,
     guard_minute_depth,
+    require_minute_range,
     to_compact_date,
+    validate_period,
 )
 
 
@@ -88,11 +90,7 @@ def _query_hist_daily(code: str, start_date: str | None, end_date: str | None) -
         date_col = "date"
     if df.empty:
         raise ValueError(f"No daily data for futures {code}")
-    if start_date or end_date:
-        return filter_by_date(
-            df, start_date or "0001-01-01", end_date or "9999-12-31", date_col=date_col
-        )
-    return df
+    return filter_by_date(df, start_date, end_date, date_col=date_col)
 
 
 def _query_hist_minute(code: str, freq: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -147,15 +145,13 @@ def query_futures(
             raise ValueError(f"kind=contracts 需要品种代码(如 IM/RB),got: {symbol}")
         df = fetch_contracts(variety.group(0), trade_date)
     elif kind == "hist":
+        validate_period(period)
         code = _normalize_futures_code(symbol)
-        if period == "daily":
-            df = _query_hist_daily(code, start_date, end_date)
-        elif period == "min":
-            if not start_date or not end_date:
-                raise ValueError("period=min 需提供 start_date 与 end_date(分钟深度有限,用于覆盖校验)")
+        if period == "min":
+            require_minute_range(start_date, end_date)
             df = _query_hist_minute(code, freq, start_date, end_date)
         else:
-            raise ValueError(f"Unsupported period: {period}, use 'daily' or 'min'")
+            df = _query_hist_daily(code, start_date, end_date)
     else:
         raise ValueError(f"Unsupported futures kind: {kind}, use 'hist' or 'contracts'")
 

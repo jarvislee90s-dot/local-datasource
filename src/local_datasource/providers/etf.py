@@ -10,7 +10,12 @@ from typing import Literal
 import akshare as ak
 
 from local_datasource.formatters import format_csv_output
-from local_datasource.providers.common import fetch_tencent_minute, filter_by_date
+from local_datasource.providers.common import (
+    fetch_tencent_minute,
+    filter_by_date,
+    require_minute_range,
+    validate_period,
+)
 
 
 EtfPeriod = Literal["daily", "min"]
@@ -51,21 +56,17 @@ def query_etf(
         start_date/end_date: ``YYYY-MM-DD``(min 必填)
     """
     code = _normalize_etf_code(symbol)
+    validate_period(period)
 
     if period == "min":
-        if not start_date or not end_date:
-            raise ValueError("period=min 需提供 start_date 与 end_date(分钟深度有限,用于覆盖校验)")
+        require_minute_range(start_date, end_date)
         df = fetch_tencent_minute(code, freq, start_date, end_date)
         return format_csv_output(df, file_path)
-
-    if period != "daily":
-        raise ValueError(f"Unsupported period: {period}, use 'daily' or 'min'")
 
     df = ak.fund_etf_hist_sina(symbol=code)
     if df.empty:
         raise ValueError(f"No daily data for ETF {symbol}")
-    if start_date or end_date:
-        df = filter_by_date(df, start_date or "0001-01-01", end_date or "9999-12-31")
+    df = filter_by_date(df, start_date, end_date)
     if df.empty:
         raise ValueError(f"No data returned for ETF {symbol}")
     return format_csv_output(df, file_path)

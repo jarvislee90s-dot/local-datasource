@@ -13,7 +13,12 @@ import pandas as pd
 import requests
 
 from local_datasource.formatters import format_csv_output
-from local_datasource.providers.common import fetch_tencent_minute, filter_by_date
+from local_datasource.providers.common import (
+    fetch_tencent_minute,
+    filter_by_date,
+    require_minute_range,
+    validate_period,
+)
 
 
 Market = Literal["a", "hk", "us"]
@@ -63,17 +68,14 @@ def query_stock(
         period: ``daily`` 默认 / ``min``(仅 A 股,腾讯源约 8 个交易日)
         freq: 分钟粒度 1/5/15/30/60,默认 1
     """
+    validate_period(period)
     if period == "min":
         if market != "a":
             raise ValueError("period=min 仅支持 A 股(腾讯源),港股/美股请用 period=daily")
-        if not start_date or not end_date:
-            raise ValueError("period=min 需提供 start_date 与 end_date(分钟深度有限,用于覆盖校验)")
+        require_minute_range(start_date, end_date)
         symbol = _normalize_a_code(ticker)
         df = fetch_tencent_minute(symbol, freq, start_date, end_date)
         return format_csv_output(df, file_path)
-
-    if period != "daily":
-        raise ValueError(f"Unsupported period: {period}, use 'daily' or 'min'")
 
     # akshare 部分接口需要 ``YYYYMMDD`` 格式的日期字符串
     start_fmt = datetime.strptime(start_date, "%Y-%m-%d").strftime("%Y%m%d")

@@ -12,7 +12,13 @@ from typing import Literal
 import akshare as ak
 
 from local_datasource.formatters import format_csv_output
-from local_datasource.providers.common import fetch_tencent_minute, filter_by_date, to_compact_date
+from local_datasource.providers.common import (
+    fetch_tencent_minute,
+    filter_by_date,
+    require_minute_range,
+    to_compact_date,
+    validate_period,
+)
 
 
 IndexPeriod = Literal["daily", "min"]
@@ -57,24 +63,20 @@ def query_index(
         start_date/end_date: ``YYYY-MM-DD``(min 必填)
     """
     code, series = _normalize_index_code(symbol)
+    validate_period(period)
 
     if period == "min":
         if series == "csindex":
             raise ValueError("中证系列官网源无分钟数据,仅支持日线;沪深指数(000/399 开头)支持分钟")
-        if not start_date or not end_date:
-            raise ValueError("period=min 需提供 start_date 与 end_date(分钟深度有限,用于覆盖校验)")
+        require_minute_range(start_date, end_date)
         df = fetch_tencent_minute(code, freq, start_date, end_date)
         return format_csv_output(df, file_path)
-
-    if period != "daily":
-        raise ValueError(f"Unsupported period: {period}, use 'daily' or 'min'")
 
     if series == "sina":
         df = ak.stock_zh_index_daily(symbol=code)
         if df.empty:
             raise ValueError(f"No daily data for index {symbol}")
-        if start_date or end_date:
-            df = filter_by_date(df, start_date or "0001-01-01", end_date or "9999-12-31")
+        df = filter_by_date(df, start_date, end_date)
     else:  # csindex,慢源(约 10 秒)
         start = to_compact_date(start_date) if start_date else "19900101"
         end = to_compact_date(end_date) if end_date else datetime.now().strftime("%Y%m%d")
