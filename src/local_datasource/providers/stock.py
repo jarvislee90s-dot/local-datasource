@@ -72,6 +72,9 @@ def query_stock(
         df = fetch_tencent_minute(symbol, freq, start_date, end_date)
         return format_csv_output(df, file_path)
 
+    if period != "daily":
+        raise ValueError(f"Unsupported period: {period}, use 'daily' or 'min'")
+
     # akshare 部分接口需要 ``YYYYMMDD`` 格式的日期字符串
     start_fmt = datetime.strptime(start_date, "%Y-%m-%d").strftime("%Y%m%d")
     end_fmt = datetime.strptime(end_date, "%Y-%m-%d").strftime("%Y%m%d")
