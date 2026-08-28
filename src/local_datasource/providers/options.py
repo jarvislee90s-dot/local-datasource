@@ -35,6 +35,15 @@ _CFFEX_DAILY_FUNCS = {
     "MO": "option_cffex_zz1000_daily_sina",
 }
 
+# SSE 官方当日表的标的标签(实测为 50ETF(510050)/科创50(588000) 等),
+# 按 6 位标的代码锚定过滤,避免名称子串误匹配
+_SSE_LABEL_CODES = {
+    "50ETF": ("510050",),
+    "300ETF": ("510300",),
+    "500ETF": ("510500",),
+    "科创50ETF": ("588000", "588080"),
+}
+
 
 def _normalize_option_code(symbol: str) -> tuple[str, str]:
     """期权合约代码归一,返回 ``(sina 查询代码, 市场)``。
@@ -77,7 +86,8 @@ def _query_contracts(underlying: str, trade_date: str | None) -> pd.DataFrame:
         df = ak.option_current_day_sse()
         if "标的券名称及代码" not in df.columns or "到期日" not in df.columns:
             raise ValueError("上交所官方合约表列名不符,请检查 akshare 版本")
-        mask = df["标的券名称及代码"].astype(str).str.contains(u, na=False, regex=False)
+        codes = df["标的券名称及代码"].astype(str).str.extract(r"\((\d{6})\)")[0]
+        mask = codes.isin(_SSE_LABEL_CODES[u])
         df = df[mask].copy()
         if df.empty:
             raise ValueError(f"No contracts matched underlying: {u}")
@@ -86,7 +96,7 @@ def _query_contracts(underlying: str, trade_date: str | None) -> pd.DataFrame:
         return df
     # CFFEX:交易所官方挂牌表(期货/期权同表),按品种前缀过滤
     df = ak.futures_contract_info_cffex(date=to_compact_date(trade_date))
-    out = df[df["合约代码"].astype(str).str.upper().str.startswith(u)].copy()
+    out = df[df["合约代码"].astype(str).str.upper().str.match(rf"^{u}\d")].copy()
     if out.empty:
         raise ValueError(f"No contracts matched underlying: {u}")
     return out
