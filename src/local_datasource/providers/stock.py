@@ -13,16 +13,10 @@ import pandas as pd
 import requests
 
 from local_datasource.formatters import format_csv_output
+from local_datasource.providers.common import filter_by_date
 
 
 Market = Literal["a", "hk", "us"]
-
-
-def _filter_by_date(df: pd.DataFrame, start_date: str, end_date: str) -> pd.DataFrame:
-    """统一把 ``date`` 列转成 ``YYYY-MM-DD`` 字符串后再按日期过滤。"""
-    df = df.copy()
-    df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
-    return df[(df["date"] >= start_date) & (df["date"] <= end_date)].copy()
 
 
 def _normalize_a_code(ticker: str) -> str:
@@ -75,11 +69,11 @@ def query_stock(
     elif market == "hk":
         symbol = _normalize_hk_code(ticker)
         df = ak.stock_hk_daily(symbol=symbol)
-        df = _filter_by_date(df, start_date, end_date)
+        df = filter_by_date(df, start_date, end_date)
     elif market == "us":
         symbol = _normalize_us_code(ticker)
         df = ak.stock_us_daily(symbol=symbol)
-        df = _filter_by_date(df, start_date, end_date)
+        df = filter_by_date(df, start_date, end_date)
     else:
         raise ValueError(f"Unsupported market: {market}")
 
