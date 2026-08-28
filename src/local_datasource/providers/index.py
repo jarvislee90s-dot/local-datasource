@@ -30,6 +30,8 @@ def _normalize_index_code(symbol: str) -> tuple[str, str]:
     if re.fullmatch(r"9[35]\d{4}", digits):
         return digits, "csindex"
     if m:
+        if not (digits.startswith("000") or digits.startswith("399")):
+            raise ValueError(f"Unrecognized index code: {symbol}(示例: 000852 / 930050 / sh000300)")
         return s, "sina"
     if re.fullmatch(r"000\d{3}", digits):
         return f"sh{digits}", "sina"
@@ -64,12 +66,15 @@ def query_index(
         df = fetch_tencent_minute(code, freq, start_date, end_date)
         return format_csv_output(df, file_path)
 
+    if period != "daily":
+        raise ValueError(f"Unsupported period: {period}, use 'daily' or 'min'")
+
     if series == "sina":
         df = ak.stock_zh_index_daily(symbol=code)
         if df.empty:
             raise ValueError(f"No daily data for index {symbol}")
-        if start_date and end_date:
-            df = filter_by_date(df, start_date, end_date)
+        if start_date or end_date:
+            df = filter_by_date(df, start_date or "0001-01-01", end_date or "9999-12-31")
     else:  # csindex,慢源(约 10 秒)
         start = to_compact_date(start_date) if start_date else "19900101"
         end = to_compact_date(end_date) if end_date else datetime.now().strftime("%Y%m%d")
