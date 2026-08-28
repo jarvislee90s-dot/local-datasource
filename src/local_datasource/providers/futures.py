@@ -82,8 +82,10 @@ def _query_hist_daily(code: str, start_date: str | None, end_date: str | None) -
         date_col = "date"
     if df.empty:
         raise ValueError(f"No daily data for futures {code}")
-    if start_date and end_date:
-        return filter_by_date(df, start_date, end_date, date_col=date_col)
+    if start_date or end_date:
+        return filter_by_date(
+            df, start_date or "0001-01-01", end_date or "9999-12-31", date_col=date_col
+        )
     return df
 
 
@@ -104,7 +106,7 @@ def _query_contracts(variety: str, trade_date: str | None) -> pd.DataFrame:
     code_col = next((c for c in ("合约代码", "代码", "symbol") if c in df.columns), None)
     if code_col is None:
         raise ValueError("该交易所合约清单列名不受支持,请检查 akshare 版本")
-    out = df[df[code_col].astype(str).str.upper().str.startswith(variety.upper())].copy()
+    out = df[df[code_col].astype(str).str.upper().str.match(rf"^{re.escape(variety.upper())}\d")].copy()
     if out.empty:
         raise ValueError(f"No contracts matched variety: {variety}")
     return out
