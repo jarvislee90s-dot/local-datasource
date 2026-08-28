@@ -1,8 +1,8 @@
 ---
 name: local-datasource
 description: |
-  当用户需要查询 A股/港股/美股行情、美股/ETF/全球资产价格、世界银行宏观经济指标、arXiv 学术论文、中国境内债券（国债收益率/信用债发行/交易所行情）、可转债（一览/条款/历史K线/发行人财务），或把股票/债券的名称/简称/全称/发行人归一化为代码，并且希望数据从本地直接获取、不经过第三方云中转、不消耗外部平台额度时，必须优先使用本 skill。
-  即使未明确提到 local-datasource 或 MCP，只要对话中出现「查股价」、「金价走势」、「GDP 数据」、「arXiv 论文」、「国债收益率」、「可转债条款」、「茅台的股票代码」、「成都东方广益的债」等需求，都应先尝试通过本 skill 完成。
+  当用户需要查询 A股/港股/美股行情、美股/ETF/全球资产价格、世界银行宏观经济指标、arXiv 学术论文、中国境内债券（国债收益率/信用债发行/交易所行情）、可转债（一览/条款/历史K线/发行人财务）、国内期货、指数、A股ETF、期权（月份/清单/日线）、个股分钟，或把股票/债券的名称/简称/全称/发行人归一化为代码，并且希望数据从本地直接获取、不经过第三方云中转、不消耗外部平台额度时，必须优先使用本 skill。
+  即使未明确提到 local-datasource 或 MCP，只要对话中出现「查股价」、「金价走势」、「GDP 数据」、「arXiv 论文」、「国债收益率」、「可转债条款」、「IM主连走势」、「中证1000点位」、「510300分钟线」、「IO期权合约」、「茅台的股票代码」、「成都东方广益的债」等需求，都应先尝试通过本 skill 完成。
 compatibility: |
   需要本地安装 local-datasource 包（pip install -e .）并保证 `local-datasource` 命令可用。
   依赖 Python 3.10+、akshare、wbgapi、arxiv、mcp、requests。绘图类任务还需 matplotlib。
@@ -10,7 +10,7 @@ compatibility: |
 
 # Local Datasource — Agent 操作手册
 
-本 skill 通过本地 MCP server 提供 7 个数据查询 tool。Agent 的核心职责是：
+本 skill 通过本地 MCP server 提供 11 个数据查询 tool。Agent 的核心职责是：
 **理解用户意图 → 选择合适工具 → 构造参数 → 解释返回结果**。
 数据的实际获取与 CSV 落盘由 MCP server 完成。项目介绍、架构、安装、配置、调用示例见 `README.md`。
 
@@ -21,6 +21,7 @@ compatibility: |
 - 用户要查 arXiv 论文。
 - 用户给了**公司名称/发行人名称**（非代码），要查对应股票或债券。
 - 用户要求「本地调用」、「免费 API」、「不登录」。
+- 用户要查期货、指数、ETF、期权的行情/合约清单,或个股/指数/ETF 分钟线。
 
 不触发：分析本地已有文件（CSV/Excel/PDF）；明确要求付费 API（Wind/Bloomberg）且未授权本地替代。
 
@@ -28,7 +29,7 @@ compatibility: |
 
 | 用户需求 | 选用工具 | 说明 |
 |---|---|---|
-| A 股 / 港股 / 美股 行情 | `query_stock` | 日线，支持前/后复权 |
+| A 股 / 港股 / 美股 行情 | `query_stock` | 日线（A/HK/US）+ A股分钟；支持前/后复权 |
 | 美股 / ETF / 海外指数 快速查 | `query_yfinance` | 默认 akshare；可回退 yfinance |
 | 世界银行宏观指标 | `query_worldbank` | 指标代码 + 国家代码 |
 | arXiv 论文 | `query_arxiv` | 关键词、排序、max_results |
@@ -36,6 +37,10 @@ compatibility: |
 | 可转债一览 / 条款 / 历史K线 / 发行人财务 | `query_convertible_bond` | kind 分流；issuer_finance 支持正股代码直查 |
 | 股票名称（简称/全称）→ 代码候选 | `resolve_stock_code` | 新浪 suggest API（支持全称），降级 akshare 全表简称；多候选择一再调 query_stock |
 | 多资产归一化对比 | 组合调用上述工具 → Agent 用 pandas/matplotlib | 见工作流 5 |
+| 国内期货（单合约/主连，日线/分钟，合约清单） | `query_futures` | kind 分流；主连 IM0 约 158 日；分钟约 4 交易日 |
+| 国内指数（沪深/中证系列，日线/分钟） | `query_index` | 000/399 走新浪；930xxx 走中证官网（慢约 10 秒，无分钟） |
+| A股场内 ETF（日线/分钟） | `query_etf` | 日线自约 2012 年，无复权；分钟约 8 交易日 |
+| 期权（ETF/股指期权：月份/清单/日线） | `query_options` | 先 months/contracts 找代码再 hist 查日线；仅日线 |
 
 ## 输入归一化总则（重要）
 
@@ -51,11 +56,17 @@ compatibility: |
 | 标债 | 发行人名（如成都东方广益） | `query_bond(kind=issue_info, bond_issue=发行人)` → 最新一只债代码 → 继续查 |
 | 标债 | 具体债代码/简称（如 2180495.IB） | `query_bond(kind=issue_info, bond_code=...)` |
 | 发行人财务 | 任意债代码/发行人名 | 先归一化到代码 → `query_convertible_bond(kind=issuer_finance, ...)` |
+| 期货 | 合约/主连（如 IM2612/IM0/IM主连） | 直接 `query_futures`，大小写与"主连"自动归一 |
+| 期货 | 品种名（如 IM、螺纹钢） | 品种代码 `query_futures(kind=contracts, symbol=IM)` 查挂牌合约 |
+| 指数 | 代码（如 000852/930050/sh000300） | 直接 `query_index`；930/95 开头自动走中证官网源 |
+| ETF | 代码（如 510300/159915） | 直接 `query_etf`，前缀自动补 |
+| 期权 | 标的名（如 IO、50ETF 期权） | `query_options(kind=months/contracts, underlying=...)` → 合约代码 → `kind=hist` |
 
 **关键边界:**
 - 股票全称反查靠新浪 suggest API（从关联字段提取 sh/sz+6 位代码）；城投/非上市发行人无上市股票，返回空候选（正常），应提示用户。
 - 标债按发行人查只返回**最新一只**（按发行日期），非全部列表；需全部时让用户明确要求。
 - 银行间债（.IB）/交易所信用债的发行人若为城投/非上市，`issuer_finance` 返回引导性提示（免费层无财务）。
+- 分钟数据深度受免费源限制（期货约 4 交易日、腾讯系约 8 交易日），请求超出覆盖会**报错并提示补数**（从 Wind/终端导出 Excel），不要把残缺数据当完整历史用；中证官网源慢约 10 秒且无分钟；期货主连仅约 158 日；ETF 日线无复权；期权仅日线。
 
 ## 三、各工具要点
 
@@ -63,8 +74,28 @@ compatibility: |
 
 ### `query_stock` — A/HK/US 股票
 - **必填**：`ticker`（A 股 `600519` / 港股 `00700` / 美股 `AAPL`）、`market`（`a`/`hk`/`us`）、`start_date`、`end_date`（`YYYY-MM-DD`）、`file_path`
-- **可选**：`adjust`（`qfq` 默认 / `hfq` / `none`）
-- **注意**：A 股/港股代码不带 `.SH`/`.SZ`/`.HK` 后缀，程序自动补齐。
+- **可选**：`adjust`（`qfq` 默认 / `hfq` / `none`，仅日线）、`period`（`daily` 默认 / `min`，min 仅 A 股）、`freq`（分钟粒度 `1/5/15/30/60`，默认 1）
+- **注意**：A 股/港股代码不带 `.SH`/`.SZ`/`.HK` 后缀，程序自动补齐。分钟约 8 个交易日深度，请求更早区间会明确报错并提示从 Wind/终端导出补数。
+
+### `query_futures` — 国内期货
+- **必填**：`symbol`（合约 `IM2612` / 主连 `IM0`（约 158 日）/ 品种 `IM`（kind=contracts））、`file_path`
+- **可选**：`kind`（`hist` 默认 / `contracts`）、`period`（`daily` 默认 / `min`）、`freq`、`start_date`/`end_date`（min 必填）、`trade_date`（contracts，默认今天）
+- **注意**：单合约日线全历史（自上市，含持仓量）；主连接口新浪源；分钟约 4 个交易日，超覆盖报错并给补数指引。contracts 走交易所官方挂牌表。
+
+### `query_index` — 国内指数
+- **必填**：`symbol`（`000852`/`sh000300`/`930050`）、`file_path`
+- **可选**：`period`（`daily` 默认 / `min`）、`freq`、`start_date`/`end_date`（min 必填）
+- **注意**：000/399 走新浪（日线自 2014 起）；`93xxxx/95xxxx` 中证系列走中证官网（慢约 10 秒，**无分钟数据**）。分钟约 8 个交易日，超覆盖报错。
+
+### `query_etf` — A股场内 ETF
+- **必填**：`symbol`（`510300`/`sh510300`）、`file_path`
+- **可选**：`period`（`daily` 默认 / `min`）、`freq`、`start_date`/`end_date`（min 必填）
+- **注意**：日线自约 2012 年，**无复权**（原始价）；分钟约 8 个交易日，超覆盖报错。
+
+### `query_options` — 期权
+- **必填**：`kind`（`months`/`contracts`/`hist`）、`file_path`；months/contracts 需 `underlying`（`50ETF`/`300ETF`/`500ETF`/`科创50ETF`/`IO`/`HO`/`MO`）；hist 需 `symbol`（如 `10003889`/`IO2706-P-5600`）
+- **可选**：`start_date`/`end_date`（hist）、`trade_date`（contracts/CFFEX）
+- **注意**：**仅日线**。先用 months/contracts 找合约代码，再 hist 查走势。合约代码宽容格式（`IO2706-P-5600` = `io2706p5600`）。
 
 ### `query_yfinance` — 美股/全球资产
 - **必填**：`ticker`（`AAPL`/`SPY`/`GLD`）、`file_path`
