@@ -1,6 +1,6 @@
 """MCP Server 入口。
 
-注册 7 个数据查询 tool：
+注册 11 个数据查询 tool：
 - ``query_stock``：A 股 / 港股 / 美股
 - ``query_yfinance``：美股/全球资产（默认 akshare，可选 yfinance）
 - ``query_worldbank``：世界银行宏观指标
@@ -8,6 +8,10 @@
 - ``query_bond``：中国境内债券（国债收益率曲线/信用债发行信息/交易所行情）
 - ``query_convertible_bond``：可转债（一览/条款/历史K线/发行人财务）
 - ``resolve_stock_code``：股票名称（简称/全称）→ 代码候选
+- ``query_futures``：国内期货(单合约/主连行情、合约清单)
+- ``query_index``：国内指数(沪深/中证系列,日线/分钟)
+- ``query_etf``：A股场内 ETF(日线/分钟)
+- ``query_options``：期权(ETF期权/股指期权:月份/清单/日线)
 
 通过标准 MCP stdio 协议与 Agent 通信。
 """
@@ -27,6 +31,10 @@ from local_datasource.config import load_config
 from local_datasource.providers.arxiv import query_arxiv
 from local_datasource.providers.bond import query_bond
 from local_datasource.providers.convertible_bond import query_convertible_bond
+from local_datasource.providers.etf import query_etf
+from local_datasource.providers.futures import query_futures
+from local_datasource.providers.index import query_index
+from local_datasource.providers.options import query_options
 from local_datasource.providers.stock import query_stock, resolve_stock_code
 from local_datasource.providers.worldbank import query_worldbank
 from local_datasource.providers.yahoo import query_yfinance
@@ -49,6 +57,8 @@ def build_tools() -> list[Tool]:
                     "start_date": {"type": "string", "description": "Start date YYYY-MM-DD"},
                     "end_date": {"type": "string", "description": "End date YYYY-MM-DD"},
                     "adjust": {"type": "string", "enum": ["qfq", "hfq", "none"], "default": "qfq", "description": "Adjustment type"},
+                    "period": {"type": "string", "enum": ["daily", "min"], "default": "daily", "description": "K-line period (min: A-share only)"},
+                    "freq": {"type": "string", "enum": ["1", "5", "15", "30", "60"], "default": "1", "description": "Minute granularity (period=min)"},
                     "file_path": {"type": "string", "description": "Output CSV file path"},
                 },
                 "required": ["ticker", "market", "start_date", "end_date", "file_path"],
@@ -165,6 +175,90 @@ def build_tools() -> list[Tool]:
                 "required": ["keyword", "file_path"],
             },
         ),
+        Tool(
+            name="query_futures",
+            description=(
+                "Query China futures. Output is written to file_path as CSV. "
+                "kind=hist: 单合约/主连行情(period=daily 全历史/约158日, period=min 约4交易日需起止日期). "
+                "kind=contracts: 品种挂牌合约清单(如 IM/RB). "
+                "分钟超覆盖时明确报错并给补数指引,不静默降级."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Contract e.g. IM2612, main IM0, or variety IM (contracts)"},
+                    "file_path": {"type": "string", "description": "Output CSV file path"},
+                    "kind": {"type": "string", "enum": ["hist", "contracts"], "default": "hist", "description": "Query type"},
+                    "period": {"type": "string", "enum": ["daily", "min"], "default": "daily", "description": "K-line period (hist)"},
+                    "freq": {"type": "string", "enum": ["1", "5", "15", "30", "60"], "default": "1", "description": "Minute granularity (period=min)"},
+                    "start_date": {"type": "string", "description": "Start date YYYY-MM-DD"},
+                    "end_date": {"type": "string", "description": "End date YYYY-MM-DD"},
+                    "trade_date": {"type": "string", "description": "Trade date YYYY-MM-DD (contracts, default today)"},
+                },
+                "required": ["symbol", "file_path"],
+            },
+        ),
+        Tool(
+            name="query_index",
+            description=(
+                "Query China indices. Output is written to file_path as CSV. "
+                "000xxx/399xxx 走新浪(日线自2014起); 930xxx/950xxx 中证系列走官网(慢约10秒). "
+                "period=min 仅沪深指数(腾讯源约8交易日). 分钟超覆盖时明确报错并给补数指引."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Index code e.g. 000852, sh000300, 930050"},
+                    "file_path": {"type": "string", "description": "Output CSV file path"},
+                    "period": {"type": "string", "enum": ["daily", "min"], "default": "daily", "description": "K-line period"},
+                    "freq": {"type": "string", "enum": ["1", "5", "15", "30", "60"], "default": "1", "description": "Minute granularity (period=min)"},
+                    "start_date": {"type": "string", "description": "Start date YYYY-MM-DD"},
+                    "end_date": {"type": "string", "description": "End date YYYY-MM-DD"},
+                },
+                "required": ["symbol", "file_path"],
+            },
+        ),
+        Tool(
+            name="query_etf",
+            description=(
+                "Query China onshore-listed ETF. Output is written to file_path as CSV. "
+                "daily 自约2012年起(新浪,无复权返回原始价); min 腾讯源约8交易日. "
+                "分钟超覆盖时明确报错并给补数指引."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "ETF code e.g. 510300 or sh510300"},
+                    "file_path": {"type": "string", "description": "Output CSV file path"},
+                    "period": {"type": "string", "enum": ["daily", "min"], "default": "daily", "description": "K-line period"},
+                    "freq": {"type": "string", "enum": ["1", "5", "15", "30", "60"], "default": "1", "description": "Minute granularity (period=min)"},
+                    "start_date": {"type": "string", "description": "Start date YYYY-MM-DD"},
+                    "end_date": {"type": "string", "description": "End date YYYY-MM-DD"},
+                },
+                "required": ["symbol", "file_path"],
+            },
+        ),
+        Tool(
+            name="query_options",
+            description=(
+                "Query China options (SSE ETF options + CFFEX index options IO/HO/MO). Output is written to file_path as CSV. "
+                "kind=months: 标的到期月份. kind=contracts: 当月合约清单. kind=hist: 单合约日线. "
+                "本轮仅日线; 找合约代码先用 months/contracts."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "kind": {"type": "string", "enum": ["months", "contracts", "hist"], "description": "Query type"},
+                    "file_path": {"type": "string", "description": "Output CSV file path"},
+                    "underlying": {"type": "string", "description": "Underlying: 50ETF/300ETF/500ETF/科创50ETF/IO/HO/MO (months/contracts)"},
+                    "symbol": {"type": "string", "description": "Option contract code e.g. 10003889 or IO2706-P-5600 (hist)"},
+                    "start_date": {"type": "string", "description": "Start date YYYY-MM-DD (hist)"},
+                    "end_date": {"type": "string", "description": "End date YYYY-MM-DD (hist)"},
+                    "trade_date": {"type": "string", "description": "Trade date YYYY-MM-DD (contracts/CFFEX, default today)"},
+                },
+                "required": ["kind", "file_path"],
+            },
+        ),
     ]
 
 
@@ -187,6 +281,14 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             _, summary = query_convertible_bond(**arguments)
         elif name == "resolve_stock_code":
             _, summary = resolve_stock_code(**arguments)
+        elif name == "query_futures":
+            _, summary = query_futures(**arguments)
+        elif name == "query_index":
+            _, summary = query_index(**arguments)
+        elif name == "query_etf":
+            _, summary = query_etf(**arguments)
+        elif name == "query_options":
+            _, summary = query_options(**arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
         return [TextContent(type="text", text=summary)]
