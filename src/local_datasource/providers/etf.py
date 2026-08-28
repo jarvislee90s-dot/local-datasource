@@ -25,7 +25,7 @@ def _normalize_etf_code(symbol: str) -> str:
     if re.fullmatch(r"\d{6}", s):
         if s.startswith("5"):
             return f"sh{s}"
-        if s.startswith("1"):
+        if s.startswith(("15", "16")):
             return f"sz{s}"
         raise ValueError(f"Not an ETF code (ETF: 5 开头沪市 / 15x·16x 深市): {symbol}")
     raise ValueError(f"Invalid ETF code: {symbol}(示例: 510300 / sh510300)")
@@ -55,11 +55,14 @@ def query_etf(
         df = fetch_tencent_minute(code, freq, start_date, end_date)
         return format_csv_output(df, file_path)
 
+    if period != "daily":
+        raise ValueError(f"Unsupported period: {period}, use 'daily' or 'min'")
+
     df = ak.fund_etf_hist_sina(symbol=code)
     if df.empty:
         raise ValueError(f"No daily data for ETF {symbol}")
-    if start_date and end_date:
-        df = filter_by_date(df, start_date, end_date)
+    if start_date or end_date:
+        df = filter_by_date(df, start_date or "0001-01-01", end_date or "9999-12-31")
     if df.empty:
         raise ValueError(f"No data returned for ETF {symbol}")
     return format_csv_output(df, file_path)
