@@ -1,6 +1,6 @@
 """MCP Server 入口。
 
-注册 13 个数据查询 tool：
+注册 14 个数据查询 tool：
 - ``query_stock``：A 股 / 港股 / 美股
 - ``query_yfinance``：美股/全球资产（默认 akshare，可选 yfinance）
 - ``query_worldbank``：世界银行宏观指标
@@ -14,6 +14,7 @@
 - ``query_options``：期权(ETF期权/股指期权:月份/清单/日线)
 - ``query_global_rates``：全球利率(美债收益率曲线/美联储 EFFR/美元指数/VIX)
 - ``query_fx``：外汇(人民币中间价/中行牌价/离岸 USDCNH/交叉盘)
+- ``query_spot``：现货(上金所贵金属/生意社大宗含基差)
 
 通过标准 MCP stdio 协议与 Agent 通信。
 """
@@ -39,6 +40,7 @@ from local_datasource.providers.fx import query_fx
 from local_datasource.providers.global_rates import query_global_rates
 from local_datasource.providers.index import query_index
 from local_datasource.providers.options import query_options
+from local_datasource.providers.spot import query_spot
 from local_datasource.providers.stock import query_stock, resolve_stock_code
 from local_datasource.providers.worldbank import query_worldbank
 from local_datasource.providers.yahoo import query_yfinance
@@ -307,6 +309,28 @@ def build_tools() -> list[Tool]:
                 "required": ["kind", "file_path"],
             },
         ),
+        Tool(
+            name="query_spot",
+            description=(
+                "Query spot prices. Output is written to file_path as CSV. "
+                "kind=sge: 上金所贵金属现货日线 date,open,high,low,close(2016-12 起约 10 年深度,"
+                "symbol 必填如 Au99.99/Ag99.99/Au(T+D)). "
+                "kind=sy: 生意社大宗现货含主力合约价与基差(symbols 如 ['CU','RB'];"
+                "起止日期必填,逐日抓取较慢,单次区间最长 1 年)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "kind": {"type": "string", "enum": ["sge", "sy"], "description": "Query type"},
+                    "file_path": {"type": "string", "description": "Output CSV file path"},
+                    "symbol": {"type": "string", "description": "SGE variety, e.g. Au99.99, Ag99.99, Au(T+D) (sge only, required)"},
+                    "symbols": {"type": "array", "items": {"type": "string"}, "description": "100ppi variety codes, e.g. [\"CU\", \"RB\"] (sy only, required)"},
+                    "start_date": {"type": "string", "description": "Start date YYYY-MM-DD (required for sy; optional filter for sge)"},
+                    "end_date": {"type": "string", "description": "End date YYYY-MM-DD (required for sy; optional filter for sge)"},
+                },
+                "required": ["kind", "file_path"],
+            },
+        ),
     ]
 
 
@@ -341,6 +365,8 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             _, summary = query_global_rates(**arguments)
         elif name == "query_fx":
             _, summary = query_fx(**arguments)
+        elif name == "query_spot":
+            _, summary = query_spot(**arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
         return [TextContent(type="text", text=summary)]
