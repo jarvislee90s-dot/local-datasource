@@ -1,6 +1,6 @@
 """MCP Server 入口。
 
-注册 11 个数据查询 tool：
+注册 12 个数据查询 tool：
 - ``query_stock``：A 股 / 港股 / 美股
 - ``query_yfinance``：美股/全球资产（默认 akshare，可选 yfinance）
 - ``query_worldbank``：世界银行宏观指标
@@ -12,6 +12,7 @@
 - ``query_index``：国内指数(沪深/中证系列,日线/分钟)
 - ``query_etf``：A股场内 ETF(日线/分钟)
 - ``query_options``：期权(ETF期权/股指期权:月份/清单/日线)
+- ``query_global_rates``：全球利率(美债收益率曲线/美联储 EFFR)
 
 通过标准 MCP stdio 协议与 Agent 通信。
 """
@@ -33,6 +34,7 @@ from local_datasource.providers.bond import query_bond
 from local_datasource.providers.convertible_bond import query_convertible_bond
 from local_datasource.providers.etf import query_etf
 from local_datasource.providers.futures import query_futures
+from local_datasource.providers.global_rates import query_global_rates
 from local_datasource.providers.index import query_index
 from local_datasource.providers.options import query_options
 from local_datasource.providers.stock import query_stock, resolve_stock_code
@@ -259,6 +261,26 @@ def build_tools() -> list[Tool]:
                 "required": ["kind", "file_path"],
             },
         ),
+        Tool(
+            name="query_global_rates",
+            description=(
+                "Query global rates for backtesting. Output is written to file_path as CSV. "
+                "kind=us_treasury: 美债收益率(2/5/10/30Y 及 10Y-2Y 利差,1990 起;tenure 选期限,短端期限仅近 1000 交易日). "
+                "kind=fed_rate: 美联储 EFFR 有效联邦基金利率(纽约联储 API,2000-07 起). "
+                "kind=dxy/vix: 美元指数/VIX(暂未支持)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "kind": {"type": "string", "enum": ["us_treasury", "fed_rate", "dxy", "vix"], "description": "Query type"},
+                    "file_path": {"type": "string", "description": "Output CSV file path"},
+                    "start_date": {"type": "string", "description": "Start date YYYY-MM-DD"},
+                    "end_date": {"type": "string", "description": "End date YYYY-MM-DD"},
+                    "tenure": {"type": "string", "enum": ["all", "2y", "5y", "10y", "30y", "1m", "3m", "4m", "6m", "1y", "7y", "20y"], "description": "Treasury tenure (us_treasury only, default all)"},
+                },
+                "required": ["kind", "file_path"],
+            },
+        ),
     ]
 
 
@@ -289,6 +311,8 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             _, summary = query_etf(**arguments)
         elif name == "query_options":
             _, summary = query_options(**arguments)
+        elif name == "query_global_rates":
+            _, summary = query_global_rates(**arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
         return [TextContent(type="text", text=summary)]
