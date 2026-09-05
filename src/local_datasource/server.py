@@ -1,6 +1,6 @@
 """MCP Server 入口。
 
-注册 12 个数据查询 tool：
+注册 13 个数据查询 tool：
 - ``query_stock``：A 股 / 港股 / 美股
 - ``query_yfinance``：美股/全球资产（默认 akshare，可选 yfinance）
 - ``query_worldbank``：世界银行宏观指标
@@ -13,6 +13,7 @@
 - ``query_etf``：A股场内 ETF(日线/分钟)
 - ``query_options``：期权(ETF期权/股指期权:月份/清单/日线)
 - ``query_global_rates``：全球利率(美债收益率曲线/美联储 EFFR/美元指数/VIX)
+- ``query_fx``：外汇(人民币中间价/中行牌价/离岸 USDCNH/交叉盘)
 
 通过标准 MCP stdio 协议与 Agent 通信。
 """
@@ -34,6 +35,7 @@ from local_datasource.providers.bond import query_bond
 from local_datasource.providers.convertible_bond import query_convertible_bond
 from local_datasource.providers.etf import query_etf
 from local_datasource.providers.futures import query_futures
+from local_datasource.providers.fx import query_fx
 from local_datasource.providers.global_rates import query_global_rates
 from local_datasource.providers.index import query_index
 from local_datasource.providers.options import query_options
@@ -282,6 +284,29 @@ def build_tools() -> list[Tool]:
                 "required": ["kind", "file_path"],
             },
         ),
+        Tool(
+            name="query_fx",
+            description=(
+                "Query FX rates. Output is written to file_path as CSV. "
+                "kind=mid: 央行人民币中间价(单位为 100 外币,自 1994 起;currency 过滤币种如 usd,eur). "
+                "kind=bochina: 中行牌价(约 2012 起,symbol 用币种中文名如 美元;起止日期必填,长区间分页拉取较慢). "
+                "kind=usdcnh: 离岸人民币 USDCNH 日线(Yahoo). "
+                "kind=cross: 交叉盘日线,pair 如 EUR/USD(Yahoo,不可达时明确报错)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "kind": {"type": "string", "enum": ["mid", "bochina", "usdcnh", "cross"], "description": "Query type"},
+                    "file_path": {"type": "string", "description": "Output CSV file path"},
+                    "currency": {"type": "string", "description": "Comma-separated currency codes (mid only), e.g. usd,eur; default all 25"},
+                    "symbol": {"type": "string", "description": "Currency Chinese name (bochina only), e.g. 美元; note 港币 not 港元"},
+                    "pair": {"type": "string", "description": "FX pair (cross only), e.g. EUR/USD or EURUSD"},
+                    "start_date": {"type": "string", "description": "Start date YYYY-MM-DD (required for bochina)"},
+                    "end_date": {"type": "string", "description": "End date YYYY-MM-DD (required for bochina)"},
+                },
+                "required": ["kind", "file_path"],
+            },
+        ),
     ]
 
 
@@ -314,6 +339,8 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             _, summary = query_options(**arguments)
         elif name == "query_global_rates":
             _, summary = query_global_rates(**arguments)
+        elif name == "query_fx":
+            _, summary = query_fx(**arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
         return [TextContent(type="text", text=summary)]
