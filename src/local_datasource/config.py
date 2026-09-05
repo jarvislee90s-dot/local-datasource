@@ -28,15 +28,29 @@ class ProvidersConfig:
 
 
 @dataclass
+class CacheConfig:
+    """下载缓存配置。
+
+    仅 ``download`` CLI(Task 10)使用;MCP 查询工具不读写缓存。
+    """
+    data_dir: str = "./datasource-cache"
+
+
+@dataclass
 class Config:
     """全局配置对象。"""
     providers: ProvidersConfig = field(default_factory=ProvidersConfig)
+    cache: CacheConfig = field(default_factory=CacheConfig)
 
 
 def _merge_defaults(data: dict[str, Any]) -> Config:
     """用用户配置覆盖默认值，返回完整的 Config 对象。"""
     yahoo = YahooConfig(**data.get("providers", {}).get("yahoo", {}))
-    return Config(providers=ProvidersConfig(yahoo=yahoo))
+    cache = CacheConfig(**(data.get("cache") or {}))
+    return Config(
+        providers=ProvidersConfig(yahoo=yahoo),
+        cache=cache,
+    )
 
 
 def load_config(path: str | None = None) -> Config:

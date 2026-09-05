@@ -2,3 +2,8 @@ providers:
   yahoo:
     # Default uses akshare (free, no key). Set use_yfinance: true to use Yahoo Finance instead.
     use_yfinance: false
+
+# 下载缓存目录（仅 download CLI 使用；MCP 查询工具不读写缓存）。
+# 默认注释（不启用）时使用内置默认 ./datasource-cache。
+# cache:
+#   data_dir: ./datasource-cache
