@@ -1,6 +1,6 @@
 """MCP Server 入口。
 
-注册 15 个 tool：
+注册 16 个 tool：
 - ``query_stock``：A 股 / 港股 / 美股
 - ``query_yfinance``：美股/全球资产（默认 akshare，可选 yfinance）
 - ``query_worldbank``：世界银行宏观指标
@@ -16,6 +16,7 @@
 - ``query_fx``：外汇(人民币中间价/中行牌价/离岸 USDCNH/交叉盘)
 - ``query_spot``：现货(上金所贵金属/生意社大宗含基差)
 - ``align_series``：多序列对齐合并(宽表/并集交集/前向填充/周月重采样,纯本地)
+- ``query_trading_rules``：交易规则参数表(税费/涨跌幅/T+1/保证金等,带生效区间,纯本地)
 
 通过标准 MCP stdio 协议与 Agent 通信。
 """
@@ -43,6 +44,7 @@ from local_datasource.providers.fx import query_fx
 from local_datasource.providers.global_rates import query_global_rates
 from local_datasource.providers.index import query_index
 from local_datasource.providers.options import query_options
+from local_datasource.providers.rules import query_trading_rules
 from local_datasource.providers.spot import query_spot
 from local_datasource.providers.stock import query_stock, resolve_stock_code
 from local_datasource.providers.worldbank import query_worldbank
@@ -355,6 +357,29 @@ def build_tools() -> list[Tool]:
                 "required": ["file_paths", "file_path"],
             },
         ),
+        Tool(
+            name="query_trading_rules",
+            description=(
+                "查询当时生效的中国交易规则参数(印花税/过户费/涨跌幅/T+1/股指期货与国债期货保证金"
+                "及平今费/融资保证金/期权与港股通费率),按 as_of 命中生效区间,缺省取今天;"
+                "每行含生效区间/来源/置信度(official/media/to_verify/market_estimate);"
+                "market=commodity_futures 返回查交易所当日结算参数的引导行。输出写入 file_path 为 CSV。"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "market": {
+                        "type": "string",
+                        "enum": ["a", "etf", "cffex", "treasury_futures", "margin", "option", "hk_connect", "commodity_futures"],
+                        "description": "Rule market: a (A股), etf, cffex (股指期货/期权品种), treasury_futures, margin (两融), option, hk_connect (港股通), commodity_futures (引导行)",
+                    },
+                    "as_of": {"type": "string", "description": "生效日判定日期 YYYY-MM-DD; default today"},
+                    "parameter": {"type": "string", "description": "Optional substring filter on parameter column (case-insensitive), e.g. 印花税/涨跌幅/融资保证金"},
+                    "file_path": {"type": "string", "description": "Output CSV file path"},
+                },
+                "required": ["market", "file_path"],
+            },
+        ),
     ]
 
 
@@ -393,6 +418,8 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             _, summary = query_spot(**arguments)
         elif name == "align_series":
             _, summary = align_series(**arguments)
+        elif name == "query_trading_rules":
+            _, summary = query_trading_rules(**arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
         return [TextContent(type="text", text=summary)]

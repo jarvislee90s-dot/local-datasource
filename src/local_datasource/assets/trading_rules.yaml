@@ -1,0 +1,1927 @@
+# 交易规则参数静态表(query_trading_rules 数据源)
+#
+# 每行 12 字段:
+#   market          市场枚举: a / etf / cffex / treasury_futures / margin / option / hk_connect
+#                   (commodity_futures 不入表,由 provider 返回引导行)
+#   parameter       参数名(provider 的 parameter 过滤只匹配本列,不区分大小写子串)
+#   scope           同一 parameter 下的适用面(沪/深、IF/IH/IC/IM、主板/创业板、持有期分档等)
+#   value           数值(税率/比例用小数,如 0.001 = 1‰;规则类用字符串,如 "T+1")
+#   unit            value 的计量口径(比例小数 / 元/手 / 元/张 / 事件 / 公式 等)
+#   basis           计费/适用基(成交金额·双边、面值、前收盘价、非套保口径 等)
+#   effective_from  生效日 YYYY-MM-DD(判定: effective_from <= as_of)
+#   effective_to    失效日 YYYY-MM-DD(判定: as_of < effective_to;null = 至今)
+#   source          来源(文号/公告链接/附录B调研)
+#   last_verified   核验日期
+#   confidence      official / media / to_verify / market_estimate
+#   note            补充说明与存疑点
+#
+# 数据源: docs/superpowers/specs/2026-09-05-回测数据源扩展-附录-调研报告.md 附录 B(调研日 2026-09-05);
+# 标注 需核实 的条目已按官网/权威来源逐条复核(2026-09-06),复核成功升为 official/media 并附链接,
+# 无法复核的保持 to_verify 并在 note 写明存疑点。市场化参数为时代分段参考值(confidence: market_estimate)。
+rules:
+  # ================= market: a (A股成本类) =================
+  # --- 印花税(附录 B1.1,1990-07-01 起每一档) ---
+  - market: a
+    parameter: 印花税
+    scope: 深市
+    value: 0.006
+    unit: 税率(成交金额小数)
+    basis: 仅卖出方
+    effective_from: "1990-07-01"
+    effective_to: "1990-11-01"
+    source: 附录B调研(2026-09-05);2026-09-06复核:山东大学经济学院《中国调整证券交易印花税历史》 https://www.econ.sdu.edu.cn/jrtzx/info/1492/27964.htm
+    last_verified: "2026-09-06"
+    confidence: media
+    note: 深市率先开征,卖出单边6‰;开征精确日多源记载为1990年年中(6月或7月1日),未查到官方公告原文,生效日取附录B的1990-07-01。
+  - market: a
+    parameter: 印花税
+    scope: 深市
+    value: 0.006
+    unit: 税率(成交金额小数)
+    basis: 双边
+    effective_from: "1990-11-01"
+    effective_to: "1991-10-10"
+    source: 同上(山东大学经济学院/新华网经济参考报多源)
+    last_verified: "2026-09-06"
+    confidence: media
+    note: 深市对买方同步开征6‰,内地双边征收开始;精确日仅记载到"1990年11月",表内取当月首日。
+  - market: a
+    parameter: 印花税
+    scope: 沪深
+    value: 0.003
+    unit: 税率(成交金额小数)
+    basis: 双边
+    effective_from: "1991-10-10"
+    effective_to: "1992-06-12"
+    source: 同上(1991-10-10 深市降至3‰、沪市开征双向3‰,多源一致)
+    last_verified: "2026-09-06"
+    confidence: media
+    note: 深市降至3‰;沪市自1991-10-10开征双向3‰。
+  - market: a
+    parameter: 印花税
+    scope: 沪深
+    value: 0.003
+    unit: 税率(成交金额小数)
+    basis: 双边
+    effective_from: "1992-06-12"
+    effective_to: "1997-05-10"
+    source: 附录B调研(2026-09-05),权威媒体多源
+    last_verified: "2026-09-05"
+    confidence: media
+    note: 全国统一 买卖双方各3‰。
+  - market: a
+    parameter: 印花税
+    scope: 沪深
+    value: 0.005
+    unit: 税率(成交金额小数)
+    basis: 双边
+    effective_from: "1997-05-10"
+    effective_to: "1998-06-12"
+    source: 附录B调研(2026-09-05),权威媒体多源
+    last_verified: "2026-09-05"
+    confidence: media
+    note: 上调至5‰双边。
+  - market: a
+    parameter: 印花税
+    scope: 沪深
+    value: 0.004
+    unit: 税率(成交金额小数)
+    basis: 双边
+    effective_from: "1998-06-12"
+    effective_to: "1999-06-01"
+    source: 附录B调研(2026-09-05),权威媒体多源
+    last_verified: "2026-09-05"
+    confidence: media
+    note: 降至4‰双边。
+  - market: a
+    parameter: 印花税
+    scope: 沪深
+    value: 0.004
+    unit: 税率(成交金额小数)
+    basis: 双边
+    effective_from: "1999-06-01"
+    effective_to: "2001-11-16"
+    source: 附录B调研(2026-09-05),权威媒体多源
+    last_verified: "2026-09-05"
+    confidence: media
+    note: A股维持4‰;同期B股降至3‰(见B股行)。
+  - market: a
+    parameter: 印花税
+    scope: B股
+    value: 0.003
+    unit: 税率(成交金额小数)
+    basis: 双边
+    effective_from: "1999-06-01"
+    effective_to: "2001-11-16"
+    source: 附录B调研(2026-09-05),权威媒体多源
+    last_verified: "2026-09-05"
+    confidence: media
+    note: B股降至3‰;2001-11-16起与A股同档(见沪深行)。
+  - market: a
+    parameter: 印花税
+    scope: 沪深
+    value: 0.002
+    unit: 税率(成交金额小数)
+    basis: 双边
+    effective_from: "2001-11-16"
+    effective_to: "2005-01-24"
+    source: 附录B调研(2026-09-05),权威媒体多源
+    last_verified: "2026-09-05"
+    confidence: media
+    note: A/B股降至2‰双边。
+  - market: a
+    parameter: 印花税
+    scope: 沪深
+    value: 0.001
+    unit: 税率(成交金额小数)
+    basis: 双边
+    effective_from: "2005-01-24"
+    effective_to: "2007-05-30"
+    source: 附录B调研(2026-09-05),权威媒体多源
+    last_verified: "2026-09-05"
+    confidence: media
+    note: 降至1‰双边。
+  - market: a
+    parameter: 印花税
+    scope: 沪深
+    value: 0.003
+    unit: 税率(成交金额小数)
+    basis: 双边
+    effective_from: "2007-05-30"
+    effective_to: "2008-04-24"
+    source: 附录B调研(2026-09-05),权威媒体多源
+    last_verified: "2026-09-05"
+    confidence: media
+    note: 5·30上调至3‰双边。
+  - market: a
+    parameter: 印花税
+    scope: 沪深
+    value: 0.001
+    unit: 税率(成交金额小数)
+    basis: 双边
+    effective_from: "2008-04-24"
+    effective_to: "2008-09-19"
+    source: 附录B调研(2026-09-05),权威媒体多源
+    last_verified: "2026-09-05"
+    confidence: media
+    note: 降至1‰双边。
+  - market: a
+    parameter: 印花税
+    scope: 沪深
+    value: 0.001
+    unit: 税率(成交金额小数)
+    basis: 成交金额·仅卖出方
+    effective_from: "2008-09-19"
+    effective_to: "2023-08-28"
+    source: 财政部/国家税务总局2008-09-18发布(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 双边改单边:仅卖出方1‰。基金(含ETF)与可转债不征印花税(见 market=etf)。
+  - market: a
+    parameter: 印花税
+    scope: 沪深
+    value: 0.0005
+    unit: 税率(成交金额小数)
+    basis: 成交金额·仅卖出方
+    effective_from: "2023-08-28"
+    effective_to: null
+    source: 财政部 税务总局公告2023年第39号(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 减半征收,卖出方0.5‰至今。
+  # --- 过户费(中国结算,附录 B1.2) ---
+  - market: a
+    parameter: 过户费
+    scope: 沪市
+    value: 0.0005
+    unit: 费率(面值小数·双边)
+    basis: 按面值计征(非成交金额)
+    effective_from: "1990-01-01"
+    effective_to: "2012-06-01"
+    source: 附录B调研(2026-09-05),单一来源
+    last_verified: "2026-09-05"
+    confidence: to_verify
+    note: 存疑点:2012年前沪市按面值0.5‰为单一来源,未查到官方公告原文(检索超时未复核);表内下界取1990-01-01。
+  - market: a
+    parameter: 过户费
+    scope: 深市
+    value: 0.0000255
+    unit: 费率(成交金额小数·双边)
+    basis: 按成交金额计征
+    effective_from: "1990-01-01"
+    effective_to: "2015-08-01"
+    source: 附录B调研(2026-09-05),单一来源
+    last_verified: "2026-09-05"
+    confidence: to_verify
+    note: 存疑点:深市0.0255‰为单一来源;2012-06~2015-07深市中间期费率未逐段核实;2015-08-01起与沪市统一(见下行)。
+  - market: a
+    parameter: 过户费
+    scope: 沪市
+    value: 0.000375
+    unit: 费率(面值小数·双边)
+    basis: 按面值计征
+    effective_from: "2012-06-01"
+    effective_to: "2012-09-01"
+    source: 附录B调研(2026-09-05),权威媒体多源
+    last_verified: "2026-09-05"
+    confidence: media
+    note: 沪市降至面值0.375‰。
+  - market: a
+    parameter: 过户费
+    scope: 沪市
+    value: 0.0003
+    unit: 费率(面值小数·双边)
+    basis: 按面值计征
+    effective_from: "2012-09-01"
+    effective_to: "2015-08-01"
+    source: 附录B调研(2026-09-05),权威媒体多源
+    last_verified: "2026-09-05"
+    confidence: media
+    note: 沪市降至面值0.3‰。
+  - market: a
+    parameter: 过户费
+    scope: 沪深
+    value: 0.00002
+    unit: 费率(成交金额小数·双边)
+    basis: 按成交金额计征(费基由面值改金额)
+    effective_from: "2015-08-01"
+    effective_to: "2022-04-29"
+    source: 中国结算公告(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 沪深统一按成交金额0.02‰;注意2015-08-01前沪市费基为面值,跨期回测不可直接比数值。
+  - market: a
+    parameter: 过户费
+    scope: 沪深
+    value: 0.00001
+    unit: 费率(成交金额小数·双边)
+    basis: 按成交金额计征
+    effective_from: "2022-04-29"
+    effective_to: null
+    source: 中国结算2022-04-28公告(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 下调50%至0.01‰至今。
+  - market: a
+    parameter: 过户费
+    scope: 北交所
+    value: 0.0000125
+    unit: 费率(成交金额小数·双边)
+    basis: 按成交金额计征
+    effective_from: "2022-04-29"
+    effective_to: null
+    source: 中国结算2022-04-28公告(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 北交所0.0125‰。
+  - market: a
+    parameter: 过户费
+    scope: 存托凭证
+    value: 0.00002
+    unit: 费率(成交金额小数·双边)
+    basis: 按成交金额计征
+    effective_from: "2022-04-29"
+    effective_to: null
+    source: 中国结算2022-04-28公告(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 存托凭证0.02‰。
+  # --- 经手费(交易所,附录 B1.3) ---
+  - market: a
+    parameter: 经手费
+    scope: 沪市
+    value: 0.00011
+    unit: 费率(成交金额小数·双边)
+    basis: 沪深A股双边
+    effective_from: "1990-01-01"
+    effective_to: "2012-06-01"
+    source: 附录B调研(2026-09-05),单一来源
+    last_verified: "2026-09-05"
+    confidence: to_verify
+    note: 存疑点:2012年前沪0.11‰为单一来源,未查到官方公告原文;表内下界取1990-01-01。
+  - market: a
+    parameter: 经手费
+    scope: 深市
+    value: 0.000122
+    unit: 费率(成交金额小数·双边)
+    basis: 沪深A股双边
+    effective_from: "1990-01-01"
+    effective_to: "2012-06-01"
+    source: 附录B调研(2026-09-05),单一来源
+    last_verified: "2026-09-05"
+    confidence: to_verify
+    note: 存疑点:2012年前深0.122‰为单一来源,未查到官方公告原文。
+  - market: a
+    parameter: 经手费
+    scope: 沪市
+    value: 0.0000875
+    unit: 费率(成交金额小数·双边)
+    basis: 沪深A股双边
+    effective_from: "2012-06-01"
+    effective_to: "2012-09-01"
+    source: 附录B调研(2026-09-05),权威媒体多源
+    last_verified: "2026-09-05"
+    confidence: media
+    note: 沪0.0875‰;深市同步下调,具体数值未单列。
+  - market: a
+    parameter: 经手费
+    scope: 沪深
+    value: 0.0000696
+    unit: 费率(成交金额小数·双边)
+    basis: 沪深A股双边
+    effective_from: "2012-09-01"
+    effective_to: "2015-08-01"
+    source: 附录B调研(2026-09-05),权威媒体多源
+    last_verified: "2026-09-05"
+    confidence: media
+    note: 沪深统一0.0696‰。
+  - market: a
+    parameter: 经手费
+    scope: 沪深
+    value: 0.0000487
+    unit: 费率(成交金额小数·双边)
+    basis: 沪深A股双边
+    effective_from: "2015-08-01"
+    effective_to: "2023-08-28"
+    source: 交易所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 0.0487‰(含0.00974‰投保基金)。
+  - market: a
+    parameter: 经手费
+    scope: 沪深
+    value: 0.0000341
+    unit: 费率(成交金额小数·双边)
+    basis: 沪深A股双边
+    effective_from: "2023-08-28"
+    effective_to: null
+    source: 上交所/证监会2023-08通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 降至0.0341‰至今。
+  # --- 证管费(附录 B1.3,单独行) ---
+  - market: a
+    parameter: 证管费
+    scope: 股票
+    value: 0.00002
+    unit: 费率(成交金额小数·双边)
+    basis: 双边代收
+    effective_from: "2012-01-01"
+    effective_to: null
+    source: 证监会(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 股票0.02‰双边(2012年起,精确生效日未核实);基金、债券免收。实务中经手费+证管费由券商佣金代收(证监发〔2002〕21号),按"全佣金"口径回测时勿重复计算。
+  # --- 佣金(附录 B1.4,市场化) ---
+  - market: a
+    parameter: 佣金
+    scope: A股/B股/基金
+    value: 0.003
+    unit: 费率上限(成交金额小数)
+    basis: 浮动佣金制
+    effective_from: "2002-05-01"
+    effective_to: null
+    source: 证监发〔2002〕21号(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 2002-05-01起浮动佣金制,上限3‰;A股每笔不足5元按5元收。实际佣金为市场化参数,见下方时代分段参考值。
+  - market: a
+    parameter: 佣金
+    scope: A股(参考值)
+    value: 0.002
+    unit: 费率(成交金额小数)
+    basis: 全佣金参考中值
+    effective_from: "2002-05-01"
+    effective_to: "2011-01-01"
+    source: 附录B调研(2026-09-05),市场化估计
+    last_verified: "2026-09-05"
+    confidence: market_estimate
+    note: 约1‰~3‰,取参考中值;可在回测代码中覆盖。
+  - market: a
+    parameter: 佣金
+    scope: A股(参考值)
+    value: 0.00075
+    unit: 费率(成交金额小数)
+    basis: 全佣金参考中值
+    effective_from: "2011-01-01"
+    effective_to: "2015-01-01"
+    source: 附录B调研(2026-09-05),市场化估计
+    last_verified: "2026-09-05"
+    confidence: market_estimate
+    note: 约万5~万10,取参考中值;可覆盖。
+  - market: a
+    parameter: 佣金
+    scope: A股(参考值)
+    value: 0.000275
+    unit: 费率(成交金额小数)
+    basis: 全佣金参考中值
+    effective_from: "2015-01-01"
+    effective_to: "2020-01-01"
+    source: 附录B调研(2026-09-05),市场化估计
+    last_verified: "2026-09-05"
+    confidence: market_estimate
+    note: 约万2.5~万3,取参考中值;可覆盖。
+  - market: a
+    parameter: 佣金
+    scope: A股(参考值)
+    value: 0.000175
+    unit: 费率(成交金额小数)
+    basis: 全佣金参考中值
+    effective_from: "2020-01-01"
+    effective_to: "2024-01-01"
+    source: 附录B调研(2026-09-05),市场化估计
+    last_verified: "2026-09-05"
+    confidence: market_estimate
+    note: 约万1~万2.5,取参考中值;可覆盖。
+  - market: a
+    parameter: 佣金
+    scope: A股(参考值)
+    value: 0.000085
+    unit: 费率(成交金额小数)
+    basis: 全佣金参考低位
+    effective_from: "2024-01-01"
+    effective_to: null
+    source: 附录B调研(2026-09-05),市场化估计
+    last_verified: "2026-09-05"
+    confidence: market_estimate
+    note: 互联网券商低至万0.85,部分"免五";注意全佣金/净佣金口径差异。
+  # --- 红利税(个人,按持有期差别化,附录 B1.5) ---
+  - market: a
+    parameter: 红利税
+    scope: 个人·不分持有期
+    value: 0.2
+    unit: 税率(股息小数)
+    basis: 全额计征
+    effective_from: "1990-01-01"
+    effective_to: "2005-06-13"
+    source: 《个人所得税法》利息股息红利所得20%税率;2026-09-06复核:财税〔2005〕102号自2005-06-13(文发之日)执行 http://www.mof.gov.cn/gkml/caizhengwengao/caizhengbuwengao2005/caizhengbuwengao20057/200805/t20080525_42790.htm
+    last_verified: "2026-09-06"
+    confidence: official
+    note: 20%全额计征(法定税率);102号文"自文发之日起执行"反证此前为全额,扣缴执行细节以当期税法为准。
+  - market: a
+    parameter: 红利税
+    scope: 个人·不分持有期
+    value: 0.1
+    unit: 税率(股息小数)
+    basis: 实际税负
+    effective_from: "2005-06-13"
+    effective_to: "2013-01-01"
+    source: 财税〔2005〕102号(官方) http://www.mof.gov.cn/gkml/caizhengwengao/caizhengbuwengao2005/caizhengbuwengao20057/200805/t20080525_42790.htm
+    last_verified: "2026-09-06"
+    confidence: official
+    note: 暂减按50%计入应纳税所得额,实际税负10%。
+  - market: a
+    parameter: 红利税
+    scope: 个人·持有≤1个月
+    value: 0.2
+    unit: 税率(股息小数)
+    basis: 全额计征
+    effective_from: "2013-01-01"
+    effective_to: "2015-09-08"
+    source: 财税〔2012〕85号(附录B,官方);2026-09-06复核 https://fgk.chinatax.gov.cn/zcfgk/c102416/c5203902/content.html
+    last_verified: "2026-09-06"
+    confidence: official
+    note: 差别化:1个月以内全额计征20%。
+  - market: a
+    parameter: 红利税
+    scope: 个人·1个月<持有≤1年
+    value: 0.1
+    unit: 税率(股息小数)
+    basis: 减按50%计入
+    effective_from: "2013-01-01"
+    effective_to: "2015-09-08"
+    source: 财税〔2012〕85号(附录B,官方);2026-09-06复核 https://fgk.chinatax.gov.cn/zcfgk/c102416/c5203902/content.html
+    last_verified: "2026-09-06"
+    confidence: official
+    note: 实际税负10%。
+  - market: a
+    parameter: 红利税
+    scope: 个人·持有>1年
+    value: 0.05
+    unit: 税率(股息小数)
+    basis: 减按25%计入
+    effective_from: "2013-01-01"
+    effective_to: "2015-09-08"
+    source: 财税〔2012〕85号(附录B,官方);2026-09-06复核 https://fgk.chinatax.gov.cn/zcfgk/c102416/c5203902/content.html
+    last_verified: "2026-09-06"
+    confidence: official
+    note: 实际税负5%。
+  - market: a
+    parameter: 红利税
+    scope: 个人·持有≤1个月
+    value: 0.2
+    unit: 税率(股息小数)
+    basis: 全额计征
+    effective_from: "2015-09-08"
+    effective_to: null
+    source: 财税〔2015〕101号(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 1个月以内仍为20%。
+  - market: a
+    parameter: 红利税
+    scope: 个人·1个月<持有≤1年
+    value: 0.1
+    unit: 税率(股息小数)
+    basis: 减按50%计入
+    effective_from: "2015-09-08"
+    effective_to: null
+    source: 财税〔2015〕101号(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 实际税负10%。
+  - market: a
+    parameter: 红利税
+    scope: 个人·持有>1年
+    value: 0.0
+    unit: 税率(股息小数)
+    basis: 免征
+    effective_from: "2015-09-08"
+    effective_to: null
+    source: 财税〔2015〕101号(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 持有超1年免征至今。
+  # ================= market: a (A股制度类,附录 B2) =================
+  # --- 涨跌幅限制矩阵 ---
+  - market: a
+    parameter: 涨跌幅限制
+    scope: 主板
+    value: 0.1
+    unit: 涨跌幅(小数)
+    basis: 前收盘价
+    effective_from: "1996-12-16"
+    effective_to: null
+    source: 沪深交易所(附录B,官方/权威媒体)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 股票、基金±10%;1992-05~1996-12无涨跌幅时期不在本表(可参照T+0行时间界)。
+  - market: a
+    parameter: 涨跌幅限制
+    scope: 沪深主板ST/*ST
+    value: 0.05
+    unit: 涨跌幅(小数)
+    basis: 前收盘价
+    effective_from: "1998-04-28"
+    effective_to: "2026-07-06"
+    source: 2026-09-06复核:中国证券业协会投资者之家/长城证券投教(1998-04-22宣布ST制度,首只ST 1998-04-28辽物资A)
+    last_verified: "2026-09-06"
+    confidence: media
+    note: 风险警示股±5%;存疑点:制度发文精确日未核实,生效日取首只ST适用日1998-04-28。2026-07-06起改±10%(见下行)。
+  - market: a
+    parameter: 涨跌幅限制
+    scope: 沪深主板ST/*ST
+    value: 0.1
+    unit: 涨跌幅(小数)
+    basis: 前收盘价
+    effective_from: "2026-07-06"
+    effective_to: null
+    source: 附录B(官方,近期变更);2026-09-06复核:上海市金融局 https://jrj.sh.gov.cn/ZXYW178/20260702/a8fb63ac6e9e49f9a47a4024a98fd7fb.html
+    last_verified: "2026-09-06"
+    confidence: official
+    note: ST/*ST涨跌幅5%→10%,与主板普通股统一;创业板/科创板风险警示股仍为各自板块的±20%。
+  - market: a
+    parameter: 涨跌幅限制
+    scope: 创业板
+    value: 0.1
+    unit: 涨跌幅(小数)
+    basis: 前收盘价
+    effective_from: "2009-10-30"
+    effective_to: "2020-08-24"
+    source: 附录B调研(2026-09-05),权威媒体多源
+    last_verified: "2026-09-05"
+    confidence: media
+    note: 开板首日无限制,次日起±10%。
+  - market: a
+    parameter: 涨跌幅限制
+    scope: 创业板
+    value: 0.2
+    unit: 涨跌幅(小数)
+    basis: 前收盘价
+    effective_from: "2020-08-24"
+    effective_to: null
+    source: 创业板注册制改革(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 统一±20%(含风险警示股);新股前5日无限制。
+  - market: a
+    parameter: 涨跌幅限制
+    scope: 科创板
+    value: 0.2
+    unit: 涨跌幅(小数)
+    basis: 前收盘价
+    effective_from: "2019-07-22"
+    effective_to: null
+    source: 上交所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: ±20%;新股前5日无限制。
+  - market: a
+    parameter: 涨跌幅限制
+    scope: 北交所
+    value: 0.3
+    unit: 涨跌幅(小数)
+    basis: 前收盘价
+    effective_from: "2021-11-15"
+    effective_to: null
+    source: 北交所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: ±30%;上市首日无限制。
+  - market: a
+    parameter: 涨跌幅限制
+    scope: 沪深(熔断特殊区间)
+    value: "±5%/±7%两档熔断"
+    unit: 熔断阈值(沪深300指数)
+    basis: 指数触发
+    effective_from: "2016-01-01"
+    effective_to: "2016-01-08"
+    source: 沪深交易所/中金所公告(附录B,官方/权威媒体)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 沪深300触发±5%熔断(暂停15分钟)、±7%熔断(暂停至收市);实际实施仅4个交易日,2016-01-08起暂停实施。
+  - market: a
+    parameter: 涨跌幅限制
+    scope: 主板新股首日
+    value: "+44%/-36%"
+    unit: 涨跌幅(首日,集合竞价20%)
+    basis: 发行价
+    effective_from: "2014-01-01"
+    effective_to: "2023-04-10"
+    source: 附录B调研(2026-09-05),权威媒体
+    last_verified: "2026-09-05"
+    confidence: to_verify
+    note: 存疑点:精确生效日未核实(两次检索均超时),区间起点约2014-01,表内取当月首日;首日+44%/-36%。
+  - market: a
+    parameter: 涨跌幅限制
+    scope: 主板新股前5日
+    value: "无限制(上市后前5个交易日)"
+    unit: 制度
+    basis: 全面注册制
+    effective_from: "2023-04-10"
+    effective_to: null
+    source: 全面注册制改革(附录B,官方/权威媒体)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 2023-04-10全面注册制首批起,主板新股前5日无涨跌幅限制;第6日起±10%(见主板行)。
+  # --- 回转交易(T+0/T+1) ---
+  - market: a
+    parameter: T+0/T+1
+    scope: 沪市
+    value: "T+0"
+    unit: 回转交易制度
+    basis: 当日回转
+    effective_from: "1992-05-21"
+    effective_to: "1995-01-01"
+    source: 2026-09-06复核:新浪财经 https://finance.sina.cn/sa/2010-05-19/detail-ikftssan9341740.d.html / 华尔街见闻 https://wallstreetcn.com/articles/3594714
+    last_verified: "2026-09-06"
+    confidence: media
+    note: 1992-05-21放开股价并实行T+0;存疑点:有文献称1992-12-24才对A股和基金正式制度化T+0,两种记载并存,精确区间未查到官方公告。
+  - market: a
+    parameter: T+0/T+1
+    scope: 深市
+    value: "T+0"
+    unit: 回转交易制度
+    basis: 当日回转
+    effective_from: "1993-11-01"
+    effective_to: "1995-01-01"
+    source: 2026-09-06复核:人民网 http://finance.people.com.cn/n/2013/0903/c1004-22781814.html
+    last_verified: "2026-09-06"
+    confidence: media
+    note: 深市1993年11月取消T+1实施T+0;精确日仅记载到月,表内取当月首日。
+  - market: a
+    parameter: T+0/T+1
+    scope: 沪深A股/基金
+    value: "T+1"
+    unit: 交收/回转制度
+    basis: 股票T+1(资金T+0)
+    effective_from: "1995-01-01"
+    effective_to: null
+    source: 沪深交易所(附录B,官方/权威媒体)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 1995-01-01起沪深A股、基金统一T+1至今;ETF中债券/货币/黄金与跨境品种例外,见 market=etf 的 T+0 行。
+  # --- 交易单位与最小变动价位(附录 B2 尾部) ---
+  - market: a
+    parameter: 最小交易单位
+    scope: 主板/创业板
+    value: "买入100股整数倍;卖出可一次性申报零股"
+    unit: 制度
+    basis: 整手交易
+    effective_from: "1990-01-01"
+    effective_to: null
+    source: 沪深交易所交易规则(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 整手100股长期稳定。
+  - market: a
+    parameter: 最小交易单位
+    scope: 科创板
+    value: "≥200股,超出部分1股递增"
+    unit: 制度
+    basis: 限价申报
+    effective_from: "2019-07-22"
+    effective_to: null
+    source: 上交所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 科创板限价申报≥200股、1股递增。
+  - market: a
+    parameter: 最小交易单位
+    scope: 北交所
+    value: "≥100股,超出部分1股递增"
+    unit: 制度
+    basis: 限价申报
+    effective_from: "2021-11-15"
+    effective_to: null
+    source: 北交所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 北交所申报≥100股、1股递增。
+  - market: a
+    parameter: 最小变动价位
+    scope: 股票
+    value: 0.01
+    unit: 元
+    basis: 报价单位
+    effective_from: "1990-01-01"
+    effective_to: null
+    source: 沪深交易所交易规则(附录B,官方,常量)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 长期稳定。
+  - market: a
+    parameter: 最小变动价位
+    scope: 基金/债券
+    value: 0.001
+    unit: 元
+    basis: 报价单位
+    effective_from: "1990-01-01"
+    effective_to: null
+    source: 沪深交易所交易规则(附录B,官方,常量)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 长期稳定。
+  # ================= market: etf (附录 B5) =================
+  - market: etf
+    parameter: 印花税
+    scope: 基金(含ETF)
+    value: 0.0
+    unit: 税率(成交金额小数)
+    basis: 免征
+    effective_from: "1990-01-01"
+    effective_to: null
+    source: 印花税暂行条例/《印花税法》(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 基金(含ETF)历来免征;《印花税法》2022-07-01施行后证券交易印花税仅指股票。可转债同样不征。
+  - market: etf
+    parameter: T+0/T+1
+    scope: 债券/货币/黄金ETF
+    value: "T+0"
+    unit: 回转交易制度
+    basis: 当日回转
+    effective_from: "2013-12-01"
+    effective_to: null
+    source: 上交所交易规则修订(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 2013-12起债券/货币/黄金ETF可T+0;精确日仅记载到月,表内取当月首日。
+  - market: etf
+    parameter: T+0/T+1
+    scope: 跨境ETF/LOF
+    value: "T+0"
+    unit: 回转交易制度
+    basis: 当日回转
+    effective_from: "2015-01-19"
+    effective_to: null
+    source: 沪深交易所公告(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 2015-01-19起跨境ETF/LOF可T+0。
+  - market: etf
+    parameter: T+0/T+1
+    scope: 股票ETF
+    value: "T+1"
+    unit: 回转交易制度
+    basis: 当日买入次日卖出
+    effective_from: "2004-01-01"
+    effective_to: null
+    source: 附录B调研(2026-09-05)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 股票ETF自2004年首只上市以来T+1(表内下界取2004-01-01);债券/货币/黄金与跨境品种见T+0行。
+  - market: etf
+    parameter: 经手费
+    scope: 沪深
+    value: 0.000045
+    unit: 费率(成交金额小数·双边)
+    basis: 双边
+    effective_from: "1990-01-01"
+    effective_to: "2021-07-19"
+    source: 交易所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 0.0045%双边;更早费率未逐段核实,表内下界取1990-01-01。
+  - market: etf
+    parameter: 经手费
+    scope: 沪深
+    value: 0.00004
+    unit: 费率(成交金额小数·双边)
+    basis: 双边
+    effective_from: "2021-07-19"
+    effective_to: null
+    source: 交易所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 2021-07-19起降至0.004%。
+  # ================= market: cffex (股指期货/股指期权品种,附录 B3) =================
+  # --- 品种上市 ---
+  - market: cffex
+    parameter: 品种上市
+    scope: IF(沪深300)
+    value: "上市"
+    unit: 事件
+    basis: 合约挂牌
+    effective_from: "2010-04-16"
+    effective_to: null
+    source: 中金所上市交易通知(附录B,官方);2026-09-06复核:农业银行转载通知 https://www.abchina.com/cn/businesses/custodian/marketing/zbsc/201004/t20100407_787697.htm
+    last_verified: "2026-09-06"
+    confidence: official
+    note: 初期保证金近月15%/季月18%,交易手续费万0.5,交割手续费万分之一(见各参数行)。
+  - market: cffex
+    parameter: 品种上市
+    scope: IH(上证50)
+    value: "上市"
+    unit: 事件
+    basis: 合约挂牌
+    effective_from: "2015-04-16"
+    effective_to: null
+    source: 附录B调研(2026-09-05,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 上市时保证金10%。
+  - market: cffex
+    parameter: 品种上市
+    scope: IC(中证500)
+    value: "上市"
+    unit: 事件
+    basis: 合约挂牌
+    effective_from: "2015-04-16"
+    effective_to: null
+    source: 附录B调研(2026-09-05,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 上市时保证金10%。
+  - market: cffex
+    parameter: 品种上市
+    scope: IM(中证1000)
+    value: "上市"
+    unit: 事件
+    basis: 合约挂牌
+    effective_from: "2022-07-22"
+    effective_to: null
+    source: 中金所通知 http://www.cffex.com.cn/cn/jystz/20220718/28855.html (2026-09-06复核)
+    last_verified: "2026-09-06"
+    confidence: official
+    note: 上市时保证金15%。
+  - market: cffex
+    parameter: 品种上市
+    scope: IO(沪深300股指期权)
+    value: "上市"
+    unit: 事件
+    basis: 合约挂牌
+    effective_from: "2019-12-23"
+    effective_to: null
+    source: 附录B调研(2026-09-05,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 股指期权参数见 market=option。
+  - market: cffex
+    parameter: 品种上市
+    scope: MO(中证1000股指期权)
+    value: "上市"
+    unit: 事件
+    basis: 合约挂牌
+    effective_from: "2022-07-22"
+    effective_to: null
+    source: 中金所通知 http://www.cffex.com.cn/cn/jystz/20220718/28855.html (2026-09-06复核)
+    last_verified: "2026-09-06"
+    confidence: official
+    note: 上市时保证金公式参数15%(见 market=option)。
+  - market: cffex
+    parameter: 品种上市
+    scope: HO(上证50股指期权)
+    value: "上市"
+    unit: 事件
+    basis: 合约挂牌
+    effective_from: "2022-12-19"
+    effective_to: null
+    source: 附录B调研(2026-09-05,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 上市时保证金公式参数12%(见 market=option)。
+  # --- 保证金(非套保口径,附录 B3.2) ---
+  - market: cffex
+    parameter: 保证金
+    scope: IF/IH
+    value: 0.15
+    unit: 比例(合约价值小数)
+    basis: 非套保·交易所标准(下限)
+    effective_from: "2010-04-16"
+    effective_to: "2012-06-29"
+    source: 中金所上市交易通知(2026-09-06复核,官方)
+    last_verified: "2026-09-06"
+    confidence: official
+    note: 近月15%、季月18%(远月更高);期货公司普遍加收3-5个百分点(市场化)。
+  - market: cffex
+    parameter: 保证金
+    scope: IF/IH
+    value: 0.12
+    unit: 比例(合约价值小数)
+    basis: 非套保·结算起生效
+    effective_from: "2012-06-29"
+    effective_to: "2014-09-01"
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 统一12%(2012-06-29结算起)。
+  - market: cffex
+    parameter: 保证金
+    scope: IF/IH
+    value: 0.1
+    unit: 比例(合约价值小数)
+    basis: 非套保·结算起生效
+    effective_from: "2014-09-01"
+    effective_to: "2015-08-26"
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 统一10%。
+  - market: cffex
+    parameter: 保证金
+    scope: IF/IH
+    value: 0.12
+    unit: 比例(合约价值小数)
+    basis: 非套保·结算起生效
+    effective_from: "2015-08-26"
+    effective_to: "2015-08-28"
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 2015股市异常波动期间首档上调。
+  - market: cffex
+    parameter: 保证金
+    scope: IF/IH
+    value: 0.2
+    unit: 比例(合约价值小数)
+    basis: 非套保·结算起生效
+    effective_from: "2015-08-28"
+    effective_to: "2015-08-31"
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 第二档上调。
+  - market: cffex
+    parameter: 保证金
+    scope: IF/IH
+    value: 0.3
+    unit: 比例(合约价值小数)
+    basis: 非套保·结算起生效
+    effective_from: "2015-08-31"
+    effective_to: "2015-09-07"
+    source: 附录B调研(2026-09-05),权威媒体
+    last_verified: "2026-09-05"
+    confidence: media
+    note: 30%;存疑点:2015-08-26~09-07之间交易所按档逐日微调,中间档细节需核实(未入表)。
+  - market: cffex
+    parameter: 保证金
+    scope: IF/IH
+    value: 0.4
+    unit: 比例(合约价值小数)
+    basis: 非套保·结算起生效(套保20%)
+    effective_from: "2015-09-07"
+    effective_to: "2017-02-17"
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 峰值40%(套保口径20%)。
+  - market: cffex
+    parameter: 保证金
+    scope: IF/IH
+    value: 0.2
+    unit: 比例(合约价值小数)
+    basis: 非套保·结算起生效
+    effective_from: "2017-02-17"
+    effective_to: "2017-09-18"
+    source: 中金所通知(附录B,官方/权威媒体)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 首次松绑。
+  - market: cffex
+    parameter: 保证金
+    scope: IF/IH
+    value: 0.15
+    unit: 比例(合约价值小数)
+    basis: 非套保·结算起生效
+    effective_from: "2017-09-18"
+    effective_to: "2018-12-03"
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 第二次松绑。
+  - market: cffex
+    parameter: 保证金
+    scope: IF/IH
+    value: 0.1
+    unit: 比例(合约价值小数)
+    basis: 非套保·结算起生效
+    effective_from: "2018-12-03"
+    effective_to: "2019-04-22"
+    source: 中金所通知(附录B,官方/权威媒体)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 第三次松绑。
+  - market: cffex
+    parameter: 保证金
+    scope: IF/IH
+    value: 0.1
+    unit: 比例(合约价值小数)
+    basis: 非套保·结算起生效
+    effective_from: "2019-04-22"
+    effective_to: null
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 现行10%;节假日临时调整(如2023-04-27结算起IF/IH/IC暂调13%/13%/15%)不入静态表,请查中金所当日通知;交易所标准为下限,期货公司普遍加收3-5个百分点(市场化)。
+  - market: cffex
+    parameter: 保证金
+    scope: IC
+    value: 0.1
+    unit: 比例(合约价值小数)
+    basis: 非套保·交易所标准(下限)
+    effective_from: "2015-04-16"
+    effective_to: "2015-08-26"
+    source: 附录B调研(2026-09-05,B3.1,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: IC上市初期10%。
+  - market: cffex
+    parameter: 保证金
+    scope: IC
+    value: 0.12
+    unit: 比例(合约价值小数)
+    basis: 非套保·结算起生效
+    effective_from: "2015-08-26"
+    effective_to: "2015-08-28"
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 12%。
+  - market: cffex
+    parameter: 保证金
+    scope: IC
+    value: 0.2
+    unit: 比例(合约价值小数)
+    basis: 非套保·结算起生效
+    effective_from: "2015-08-28"
+    effective_to: "2015-08-31"
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 20%。
+  - market: cffex
+    parameter: 保证金
+    scope: IC
+    value: 0.3
+    unit: 比例(合约价值小数)
+    basis: 非套保·结算起生效
+    effective_from: "2015-08-31"
+    effective_to: "2015-09-07"
+    source: 附录B调研(2026-09-05),权威媒体
+    last_verified: "2026-09-05"
+    confidence: media
+    note: 30%;存疑点:同IF/IH,中间档逐日微调细节需核实。
+  - market: cffex
+    parameter: 保证金
+    scope: IC
+    value: 0.4
+    unit: 比例(合约价值小数)
+    basis: 非套保·结算起生效(套保20%)
+    effective_from: "2015-09-07"
+    effective_to: "2017-02-17"
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 峰值40%。
+  - market: cffex
+    parameter: 保证金
+    scope: IC
+    value: 0.3
+    unit: 比例(合约价值小数)
+    basis: 非套保·结算起生效
+    effective_from: "2017-02-17"
+    effective_to: "2017-09-18"
+    source: 中金所通知(附录B,官方/权威媒体)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 首次松绑仅IF/IH降至20%,IC维持30%。
+  - market: cffex
+    parameter: 保证金
+    scope: IC
+    value: 0.3
+    unit: 比例(合约价值小数)
+    basis: 非套保·结算起生效
+    effective_from: "2017-09-18"
+    effective_to: "2018-12-03"
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: IC维持30%。
+  - market: cffex
+    parameter: 保证金
+    scope: IC
+    value: 0.15
+    unit: 比例(合约价值小数)
+    basis: 非套保·结算起生效
+    effective_from: "2018-12-03"
+    effective_to: "2019-04-22"
+    source: 中金所通知(附录B,官方/权威媒体)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 15%。
+  - market: cffex
+    parameter: 保证金
+    scope: IC
+    value: 0.12
+    unit: 比例(合约价值小数)
+    basis: 非套保·结算起生效
+    effective_from: "2019-04-22"
+    effective_to: null
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 现行12%;节假日临时调整不入静态表(见IF/IH现行行note)。
+  - market: cffex
+    parameter: 保证金
+    scope: IM
+    value: 0.15
+    unit: 比例(合约价值小数)
+    basis: 非套保·交易所标准(下限)
+    effective_from: "2022-07-22"
+    effective_to: null
+    source: 中金所IM上市通知 http://www.cffex.com.cn/cn/jystz/20220718/28855.html (附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 上市即15%,至今未变。
+  # --- 交易手续费(附录 B3.3) ---
+  - market: cffex
+    parameter: 手续费
+    scope: IF/IH/IC/IM(适用期)
+    value: 0.000025
+    unit: 费率(成交金额小数,即万0.25)
+    basis: 成交金额
+    effective_from: "2010-04-16"
+    effective_to: "2015-08-26"
+    source: 附录B调研(2026-09-05),官方(带存疑)
+    last_verified: "2026-09-05"
+    confidence: to_verify
+    note: 存疑点:2010-2012早期费率需核实;2026-09-06复核到上市通知为万0.5(经农行官网转载 https://www.abchina.com/cn/businesses/custodian/marketing/zbsc/201004/t20100407_787697.htm),由万0.5降至万0.25的切换日未核实,本行取附录B的万0.25口径。
+  - market: cffex
+    parameter: 手续费
+    scope: IF/IH/IC
+    value: 0.000025
+    unit: 费率(成交金额小数,即万0.25)
+    basis: 成交金额
+    effective_from: "2015-08-26"
+    effective_to: "2023-03-20"
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 万0.25,不分平今(IM尚未上市)。
+  - market: cffex
+    parameter: 手续费
+    scope: IF/IH/IC/IM
+    value: 0.000023
+    unit: 费率(成交金额小数,即万0.23)
+    basis: 成交金额
+    effective_from: "2023-03-20"
+    effective_to: null
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 四品种统一;存疑点:基础费万0.25→0.23的确切生效日需核实,以2023-03-20为准。
+  # --- 平今仓手续费(附录 B3.3) ---
+  - market: cffex
+    parameter: 平今仓手续费
+    scope: IF/IH/IC
+    value: 0.000115
+    unit: 费率(成交金额小数,即万1.15)
+    basis: 当日平今仓成交金额
+    effective_from: "2015-08-26"
+    effective_to: "2015-09-07"
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 平今仓收费自此开征。
+  - market: cffex
+    parameter: 平今仓手续费
+    scope: IF/IH/IC
+    value: 0.0023
+    unit: 费率(成交金额小数,即万23)
+    basis: 当日平今仓成交金额
+    effective_from: "2015-09-07"
+    effective_to: "2017-02-17"
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 历史峰值万23。
+  - market: cffex
+    parameter: 平今仓手续费
+    scope: IF/IH/IC
+    value: 0.00092
+    unit: 费率(成交金额小数,即万9.2)
+    basis: 当日平今仓成交金额
+    effective_from: "2017-02-17"
+    effective_to: "2017-09-18"
+    source: 中金所通知(附录B,官方/权威媒体)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 首次松绑。
+  - market: cffex
+    parameter: 平今仓手续费
+    scope: IF/IH/IC
+    value: 0.00069
+    unit: 费率(成交金额小数,即万6.9)
+    basis: 当日平今仓成交金额
+    effective_from: "2017-09-18"
+    effective_to: "2018-12-03"
+    source: 附录B调研(2026-09-05),权威媒体
+    last_verified: "2026-09-05"
+    confidence: media
+    note: 第二次松绑。
+  - market: cffex
+    parameter: 平今仓手续费
+    scope: IF/IH/IC
+    value: 0.00046
+    unit: 费率(成交金额小数,即万4.6)
+    basis: 当日平今仓成交金额
+    effective_from: "2018-12-03"
+    effective_to: "2019-04-22"
+    source: 附录B调研(2026-09-05),权威媒体
+    last_verified: "2026-09-05"
+    confidence: media
+    note: 第三次松绑。
+  - market: cffex
+    parameter: 平今仓手续费
+    scope: IF/IH/IC
+    value: 0.000345
+    unit: 费率(成交金额小数,即万3.45)
+    basis: 当日平今仓成交金额
+    effective_from: "2019-04-22"
+    effective_to: "2023-03-20"
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 万3.45。
+  - market: cffex
+    parameter: 平今仓手续费
+    scope: IF/IH/IC/IM
+    value: 0.00023
+    unit: 费率(成交金额小数,即万2.3)
+    basis: 当日平今仓成交金额
+    effective_from: "2023-03-20"
+    effective_to: null
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 四品种统一万2.3至今。
+  # --- 申报费/交割费/限仓(附录 B3.3 尾段) ---
+  - market: cffex
+    parameter: 申报费
+    scope: IF/IH/IC/IM
+    value: 1
+    unit: 元/笔
+    basis: 每笔申报(含撤单)
+    effective_from: "2010-04-16"
+    effective_to: null
+    source: 附录B调研(2026-09-05)
+    last_verified: "2026-09-05"
+    confidence: to_verify
+    note: 存疑点:费率长期1元/笔,但开征起始日与历次细节未核实,表内下界取IF上市日。
+  - market: cffex
+    parameter: 交割手续费
+    scope: IF/IH/IC/IM
+    value: 0.0001
+    unit: 费率(交割金额小数,即万分之一)
+    basis: 交割金额
+    effective_from: "2010-04-16"
+    effective_to: null
+    source: IF上市交易通知(2026-09-06复核) https://www.abchina.com/cn/businesses/custodian/marketing/zbsc/201004/t20100407_787697.htm
+    last_verified: "2026-09-06"
+    confidence: official
+    note: 万分之一,上市通知即有,长期标准;后续是否调整未逐段核实。
+  - market: cffex
+    parameter: 日内开仓限额
+    scope: IF/IH/IC
+    value: 10
+    unit: 手/日
+    basis: 非套保单日开仓
+    effective_from: "2015-09-07"
+    effective_to: "2018-12-03"
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 2015-09-07起10手/日(此前无此限制)。
+  - market: cffex
+    parameter: 日内开仓限额
+    scope: IF/IH/IC
+    value: 50
+    unit: 手/日
+    basis: 非套保单日开仓
+    effective_from: "2018-12-03"
+    effective_to: "2019-04-22"
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 放宽至50手。
+  - market: cffex
+    parameter: 日内开仓限额
+    scope: IF/IH/IC
+    value: 500
+    unit: 手/日
+    basis: 非套保单日开仓
+    effective_from: "2019-04-22"
+    effective_to: "2022-12-19"
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 放宽至500手。
+  - market: cffex
+    parameter: 日内开仓限额
+    scope: IF/IH/IC/IM
+    value: 500
+    unit: 手/日
+    basis: 非套保单日开仓
+    effective_from: "2022-12-19"
+    effective_to: null
+    source: 中金所通知(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 四品种统一500手至今。
+  # ================= market: treasury_futures (附录 B3.4) =================
+  - market: treasury_futures
+    parameter: 品种上市
+    scope: TF(5年期)
+    value: "上市"
+    unit: 事件
+    basis: 合约挂牌
+    effective_from: "2013-09-06"
+    effective_to: null
+    source: 附录B调研(2026-09-05,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 上市时保证金3%。
+  - market: treasury_futures
+    parameter: 品种上市
+    scope: T(10年期)
+    value: "上市"
+    unit: 事件
+    basis: 合约挂牌
+    effective_from: "2015-03-20"
+    effective_to: null
+    source: 附录B调研(2026-09-05,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 上市时保证金2%。
+  - market: treasury_futures
+    parameter: 品种上市
+    scope: TS(2年期)
+    value: "上市"
+    unit: 事件
+    basis: 合约挂牌
+    effective_from: "2018-08-17"
+    effective_to: null
+    source: 附录B调研(2026-09-05,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 上市时保证金0.5%。
+  - market: treasury_futures
+    parameter: 品种上市
+    scope: TL(30年期)
+    value: "上市"
+    unit: 事件
+    basis: 合约挂牌
+    effective_from: "2023-04-21"
+    effective_to: null
+    source: 附录B调研(2026-09-05,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 上市时保证金3.5%、涨跌停±3.5%。
+  - market: treasury_futures
+    parameter: 保证金
+    scope: TF
+    value: 0.03
+    unit: 比例(合约价值小数)
+    basis: 交易所标准
+    effective_from: "2013-09-06"
+    effective_to: "2014-11-03"
+    source: 中金所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 上市时3%。
+  - market: treasury_futures
+    parameter: 保证金
+    scope: TF
+    value: 0.02
+    unit: 比例(合约价值小数)
+    basis: 交易所标准
+    effective_from: "2014-11-03"
+    effective_to: "2015-03-01"
+    source: 中金所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 2014-11-03降至2%。
+  - market: treasury_futures
+    parameter: 保证金
+    scope: TF
+    value: 0.012
+    unit: 比例(合约价值小数)
+    basis: 交易所标准
+    effective_from: "2015-03-01"
+    effective_to: null
+    source: 附录B调研(2026-09-05)
+    last_verified: "2026-09-05"
+    confidence: to_verify
+    note: 存疑点:约2015-03起降至1.2%,精确生效日需核实,表内取当月首日;2018-02梯度保证金三级并为两级(不改变本表口径)。
+  - market: treasury_futures
+    parameter: 保证金
+    scope: T
+    value: 0.02
+    unit: 比例(合约价值小数)
+    basis: 交易所标准
+    effective_from: "2015-03-20"
+    effective_to: null
+    source: 中金所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 上市即2%。
+  - market: treasury_futures
+    parameter: 保证金
+    scope: TS
+    value: 0.005
+    unit: 比例(合约价值小数)
+    basis: 交易所标准
+    effective_from: "2018-08-17"
+    effective_to: null
+    source: 中金所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 上市即0.5%。
+  - market: treasury_futures
+    parameter: 保证金
+    scope: TL
+    value: 0.035
+    unit: 比例(合约价值小数)
+    basis: 交易所标准
+    effective_from: "2023-04-21"
+    effective_to: null
+    source: 中金所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 上市即3.5%。
+  - market: treasury_futures
+    parameter: 涨跌幅限制
+    scope: TL
+    value: 0.035
+    unit: 涨跌幅(小数)
+    basis: 前结算价
+    effective_from: "2023-04-21"
+    effective_to: null
+    source: 中金所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: TL涨跌停±3.5%;TF/T/TS涨跌停参数附录B未收录。
+  - market: treasury_futures
+    parameter: 平今仓手续费
+    scope: TF
+    value: 3
+    unit: 元/手
+    basis: 当日平今仓
+    effective_from: "2015-12-01"
+    effective_to: "2018-02-05"
+    source: 中金所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 3元/手。
+  - market: treasury_futures
+    parameter: 平今仓手续费
+    scope: TF
+    value: 0
+    unit: 元/手
+    basis: 免收
+    effective_from: "2018-02-05"
+    effective_to: null
+    source: 中金所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 2018-02-05起免收至今。
+  - market: treasury_futures
+    parameter: 平今仓手续费
+    scope: T/TS/TL
+    value: 0
+    unit: 元/手
+    basis: 免收
+    effective_from: "2024-07-01"
+    effective_to: null
+    source: 中金所2024-07收费一览表(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 现行平今免收(与TF一致);各期限开征历史未整理,表内下界取收费一览表口径。
+  - market: treasury_futures
+    parameter: 手续费
+    scope: TF/T/TS/TL
+    value: 3
+    unit: 元/手
+    basis: 成交金额之外按手计
+    effective_from: "2024-07-01"
+    effective_to: null
+    source: 中金所2024-07收费一览表(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 现行各期限统一3元/手;更早费率未逐段整理,表内下界取收费一览表口径。
+  - market: treasury_futures
+    parameter: 交割手续费
+    scope: TF/T/TS/TL
+    value: 5
+    unit: 元/手
+    basis: 交割
+    effective_from: "2024-07-01"
+    effective_to: null
+    source: 中金所2024-07收费一览表(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 现行5元/手;历史变动未整理。
+  # ================= market: margin (融资融券,附录 B6) =================
+  - market: margin
+    parameter: 融资保证金最低比例
+    scope: 沪深
+    value: 0.5
+    unit: 比例(小数)
+    basis: 融资买入时最低保证金
+    effective_from: "2010-03-31"
+    effective_to: "2015-11-23"
+    source: 交易所实施细则/证监会(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 业务2010-03-31开通,首批标的90只;最低比例50%。
+  - market: margin
+    parameter: 融资保证金最低比例
+    scope: 沪深
+    value: 1.0
+    unit: 比例(小数)
+    basis: 融资买入时最低保证金
+    effective_from: "2015-11-23"
+    effective_to: "2023-09-08"
+    source: 证监会/交易所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 提高至100%,新老划断。
+  - market: margin
+    parameter: 融资保证金最低比例
+    scope: 沪深
+    value: 0.8
+    unit: 比例(小数)
+    basis: 融资买入时最低保证金
+    effective_from: "2023-09-08"
+    effective_to: "2026-01-19"
+    source: 证监会/交易所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 降低至80%;2023-09-08收市后实施,首个适用交易日为2023-09-11。
+  - market: margin
+    parameter: 融资保证金最低比例
+    scope: 沪深北
+    value: 1.0
+    unit: 比例(小数)
+    basis: 融资买入时最低保证金
+    effective_from: "2026-01-19"
+    effective_to: null
+    source: 证监会/交易所(附录B,官方,近期变更)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 回调至100%(沪深北)。
+  - market: margin
+    parameter: 融券保证金比例
+    scope: 一般投资者
+    value: 0.5
+    unit: 比例(小数)
+    basis: 融券卖出时最低保证金
+    effective_from: "2010-03-31"
+    effective_to: "2023-10-30"
+    source: 交易所融资融券实施细则(附录B+多源,权威媒体)
+    last_verified: "2026-09-06"
+    confidence: media
+    note: 下限50%(细则长期标准);存疑点:早期档细节按附录B口径未逐条核实。
+  - market: margin
+    parameter: 融券保证金比例
+    scope: 一般投资者
+    value: 0.8
+    unit: 比例(小数)
+    basis: 融券卖出时最低保证金
+    effective_from: "2023-10-30"
+    effective_to: "2024-07-22"
+    source: 2026-09-06复核:证监会2023-10-14发布,中国证券报 https://cs.com.cn/qs/202310/t20231030_6373274.html / 上海金融监管局 https://jrj.sh.gov.cn/SCGK194/20231030/c45d963a5b70438394e41c5dcd085c6d.html
+    last_verified: "2026-09-06"
+    confidence: official
+    note: 由不低于50%上调至80%,2023-10-30施行(附录B记"2023-10底",已复核到精确施行日)。
+  - market: margin
+    parameter: 融券保证金比例
+    scope: 私募基金
+    value: 1.0
+    unit: 比例(小数)
+    basis: 融券卖出时最低保证金
+    effective_from: "2023-10-30"
+    effective_to: "2024-07-22"
+    source: 同上(中国证券报/上海金融监管局,2026-09-06复核)
+    last_verified: "2026-09-06"
+    confidence: official
+    note: 私募上调至100%。
+  - market: margin
+    parameter: 融券保证金比例
+    scope: 一般投资者
+    value: 1.0
+    unit: 比例(小数)
+    basis: 融券卖出时最低保证金
+    effective_from: "2024-07-22"
+    effective_to: null
+    source: 2026-09-06复核:证监会公告 https://www.csrc.gov.cn/csrc/c100028/c7493852/content.shtml
+    last_verified: "2026-09-06"
+    confidence: official
+    note: 附录B未含此档——复核时发现:2024-07-22起进一步上调至100%;同期证监会公告暂停转融券业务,融券实务券源大幅收缩。
+  - market: margin
+    parameter: 融券保证金比例
+    scope: 私募基金
+    value: 1.2
+    unit: 比例(小数)
+    basis: 融券卖出时最低保证金
+    effective_from: "2024-07-22"
+    effective_to: null
+    source: 同上(证监会公告,2026-09-06复核)
+    last_verified: "2026-09-06"
+    confidence: official
+    note: 私募上调至120%。
+  - market: margin
+    parameter: 标的扩容
+    scope: 标的数量
+    value: "285→500→700→900→950→1600→2200只(历次扩容)"
+    unit: 只
+    basis: 可融资融券标的
+    effective_from: "2011-12-05"
+    effective_to: null
+    source: 交易所公告(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 2011-12-05起历次扩容;现季度定期调整;逐次日期请查交易所公告。
+  - market: margin
+    parameter: 两融利率(参考)
+    scope: 融资利率(参考值)
+    value: 0.086
+    unit: 年化利率(小数)
+    basis: 市场化参考默认
+    effective_from: "2010-03-31"
+    effective_to: "2016-01-01"
+    source: 附录B调研(2026-09-05),市场化估计
+    last_verified: "2026-09-05"
+    confidence: market_estimate
+    note: 早期普遍约8%~8.6%;参考值可在回测代码中覆盖。
+  - market: margin
+    parameter: 两融利率(参考)
+    scope: 融资利率(参考值)
+    value: 0.0835
+    unit: 年化利率(小数)
+    basis: 市场化参考默认
+    effective_from: "2016-01-01"
+    effective_to: "2020-01-01"
+    source: 附录B调研(2026-09-05),市场化估计
+    last_verified: "2026-09-05"
+    confidence: market_estimate
+    note: 常见默认约8.35%;参考值可覆盖。
+  - market: margin
+    parameter: 两融利率(参考)
+    scope: 融资利率(参考值)
+    value: 0.07
+    unit: 年化利率(小数)
+    basis: 市场化参考默认
+    effective_from: "2020-01-01"
+    effective_to: "2024-01-01"
+    source: 附录B调研(2026-09-05),市场化估计
+    last_verified: "2026-09-05"
+    confidence: market_estimate
+    note: 约6%~8%;参考值可覆盖。
+  - market: margin
+    parameter: 两融利率(参考)
+    scope: 融资利率(参考值)
+    value: 0.05
+    unit: 年化利率(小数)
+    basis: 市场化参考默认
+    effective_from: "2024-01-01"
+    effective_to: null
+    source: 附录B调研(2026-09-05),市场化估计
+    last_verified: "2026-09-05"
+    confidence: market_estimate
+    note: 约4%~5.5%,部分更低;券源费率同为市场化,参考值可覆盖。
+  # ================= market: option (附录 B7) =================
+  - market: option
+    parameter: 经手费
+    scope: ETF期权
+    value: 2
+    unit: 元/张
+    basis: 双向,卖开/备兑暂免
+    effective_from: "2015-02-09"
+    effective_to: "2016-11-01"
+    source: 上交所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 2015-02-09(50ETF期权上市)起2元/张。
+  - market: option
+    parameter: 经手费
+    scope: ETF期权
+    value: 1.3
+    unit: 元/张
+    basis: 双向,卖开/备兑暂免
+    effective_from: "2016-11-01"
+    effective_to: null
+    source: 上交所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 降至1.3元/张至今。
+  - market: option
+    parameter: 结算费
+    scope: ETF期权·交易结算
+    value: 0.3
+    unit: 元/张
+    basis: 交易结算
+    effective_from: "2015-02-09"
+    effective_to: null
+    source: 上交所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 0.3元/张。
+  - market: option
+    parameter: 结算费
+    scope: ETF期权·行权结算
+    value: 0.6
+    unit: 元/张
+    basis: 仅行权方
+    effective_from: "2015-02-09"
+    effective_to: null
+    source: 上交所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 行权结算0.6元/张。
+  - market: option
+    parameter: 保证金公式
+    scope: ETF期权
+    value: "认购:[前结算价+Max(12%×标的前收盘-虚值,7%×标的前收盘)]×合约单位;认沽类似"
+    unit: 公式
+    basis: 交易所开仓保证金
+    effective_from: "2015-02-09"
+    effective_to: null
+    source: 上交所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 公式自2015-02-09未变;券商普遍在交易所标准上上浮10%~50%(市场化)。
+  - market: option
+    parameter: 保证金公式参数
+    scope: IO(沪深300股指期权)
+    value: 0.1
+    unit: 比例(小数)
+    basis: 上市通知基准参数
+    effective_from: "2019-12-23"
+    effective_to: null
+    source: 中金所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 保证金公式参数存在品种差异,需按上市通知逐条整理。
+  - market: option
+    parameter: 保证金公式参数
+    scope: MO(中证1000股指期权)
+    value: 0.15
+    unit: 比例(小数)
+    basis: 上市通知基准参数
+    effective_from: "2022-07-22"
+    effective_to: null
+    source: 中金所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 同上。
+  - market: option
+    parameter: 保证金公式参数
+    scope: HO(上证50股指期权)
+    value: 0.12
+    unit: 比例(小数)
+    basis: 上市通知基准参数
+    effective_from: "2022-12-19"
+    effective_to: null
+    source: 中金所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 同上。
+  - market: option
+    parameter: 手续费
+    scope: IO/MO/HO(股指期权)
+    value: 15
+    unit: 元/手
+    basis: 交易手续费
+    effective_from: "2019-12-23"
+    effective_to: null
+    source: 中金所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: IO/MO/HO同标准,无平今区分;市场流传"平今75元"多为期货公司加收;MO/HO自各自上市日起适用(本行下界取IO上市日)。
+  - market: option
+    parameter: 行权手续费
+    scope: IO/MO/HO(股指期权)
+    value: 2
+    unit: 元/手
+    basis: 行权
+    effective_from: "2019-12-23"
+    effective_to: null
+    source: 中金所(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 行权2元/手。
+  # ================= market: hk_connect (附录 B8) =================
+  - market: hk_connect
+    parameter: 开通日期
+    scope: 沪港通
+    value: "开通"
+    unit: 事件
+    basis: 互联互通机制
+    effective_from: "2014-11-17"
+    effective_to: null
+    source: 附录B调研(2026-09-05,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 沪港通2014-11-17开通。
+  - market: hk_connect
+    parameter: 开通日期
+    scope: 深港通
+    value: "开通"
+    unit: 事件
+    basis: 互联互通机制
+    effective_from: "2016-12-05"
+    effective_to: null
+    source: 附录B调研(2026-09-05,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 深港通2016-12-05开通。
+  - market: hk_connect
+    parameter: 红利税
+    scope: H股
+    value: 0.2
+    unit: 税率(股息小数)
+    basis: 代扣代缴·不按持有期差别化
+    effective_from: "2014-11-17"
+    effective_to: null
+    source: 财税〔2014〕81号/财税〔2016〕127号(附录B,官方)
+    last_verified: "2026-09-05"
+    confidence: official
+    note: 内地个人经港股通投H股股息按20%代扣,不按A股持有期差别化。
+  - market: hk_connect
+    parameter: 红利税
+    scope: 红筹(非H股)
+    value: 0.28
+    unit: 税率(股息小数)
+    basis: 综合税负(约)
+    effective_from: "2014-11-17"
+    effective_to: null
+    source: 附录B(官方规则+媒体解读)
+    last_verified: "2026-09-05"
+    confidence: media
+    note: 非H股红筹若公司先扣10%企业所得税,综合税负约28%=1-(1-20%)×(1-10%);个案按公司公告核实。
+  - market: hk_connect
+    parameter: 转让差价个税
+    scope: 个人·转让差价
+    value: "暂免征收"
+    unit: 政策
+    basis: 阶段性免征
+    effective_from: "2014-11-17"
+    effective_to: null
+    source: 财税〔2014〕81号(沪)/财税〔2016〕127号(深);2026-09-06复核:延续至2027-12-31(财政部 税务总局 证监会公告2023年第23号) http://beijing.chinatax.gov.cn/bjswj/c104758/202308/2dd0c88303c74cd19bb0ebe20e2e2589.shtml
+    last_verified: "2026-09-06"
+    confidence: official
+    note: 暂免政策历次延期,现行执行至2027-12-31;到期后是否延续需关注。
+  - market: hk_connect
+    parameter: 交易制度
+    scope: 港股(通)
+    value: "T+0回转/T+2交收/无个股涨跌幅"
+    unit: 制度
+    basis: 港交所规则
+    effective_from: "2014-11-17"
+    effective_to: null
+    source: 附录B调研(2026-09-05)
+    last_verified: "2026-09-05"
+    confidence: media
+    note: 有VCM市调机制冷静期;港股通不能参与:打新/暗盘、标的范围外证券、卖空融券、碎股买入等。
