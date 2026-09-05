@@ -1,4 +1,4 @@
-"""全球利率 provider:美债收益率曲线 + 美联储 EFFR + 美元指数(vix 由后续任务补齐)。
+"""全球利率 provider:美债收益率曲线 + 美联储 EFFR + 美元指数 + VIX。
 
 - us_treasury:东财 ``bond_zh_us_rate`` 全表(1990-12-19 起)选美国列,
   输出 2/5/10/30Y 与 10Y-2Y 利差;短端(1m/3m/4m/6m/1y/7y/20y)走新浪
@@ -8,9 +8,13 @@
   全量一次请求会读超时),失败重试一次,仍失败报网络指引
 - dxy:美元指数。首选东财 ``index_global_hist_em(symbol="美元指数")``,
   失败回退 yfinance ``DX-Y.NYB``;两源均失败报网络指引(检查代理/网络)
+- vix:CBOE 官方 VIX 指数日线直连(cdn.cboe.com ``VIX_History.csv``,
+  1990-01-02 起),30 秒超时失败重试一次,仍失败报网络指引
 """
 from __future__ import annotations
 
+import io
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from typing import Literal
 
@@ -56,6 +60,10 @@ _EFFR_CHUNK_YEARS = 10  # 单次请求跨度上限,防止全量一次请求超�
 _EM_DXY_COLUMNS = {"日期": "date", "今开": "open", "最高": "high", "最低": "low", "最新价": "close"}
 _DXY_COLUMNS = ["date", "open", "high", "low", "close"]
 _DXY_YAHOO_TICKER = "DX-Y.NYB"
+
+# vix:CBOE 官方日线 CSV(US 风格日期 M/D/YYYY,1990-01-02 起)
+_CBOE_VIX_URL = "https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv"
+_CBOE_VIX_COLUMNS = {"DATE": "date", "OPEN": "open", "HIGH": "high", "LOW": "low", "CLOSE": "close"}
 
 
 def _check_tenure_scope(kind: str, tenure: str | None) -> None:
@@ -104,17 +112,29 @@ def _query_us_treasury(tenure: str | None, start_date: str | None, end_date: str
     return df.sort_values("date").reset_index(drop=True)
 
 
-def _http_get_json(url: str) -> dict:
-    """GET JSON,30 秒超时,失败重试一次,仍失败报网络指引。"""
+def _http_get(url: str, source: str) -> requests.Response:
+    """GET 请求,30 秒超时,失败重试一次;仍失败报含"不可达"的网络指引并保留异常链。"""
     last_exc: Exception | None = None
     for _ in range(2):
         try:
             resp = requests.get(url, timeout=30)
             resp.raise_for_status()
-            return resp.json()
+            return resp
         except requests.RequestException as e:  # 重试一次
             last_exc = e
-    raise ValueError(f"纽约联储 API 请求失败(已重试一次): {last_exc}。请检查网络/代理后重试") from last_exc
+    raise ValueError(
+        f"{source} 请求失败(已重试一次): {last_exc}。该源在当前网络不可达,请检查网络/代理后重试"
+    ) from last_exc
+
+
+def _http_get_json(url: str) -> dict:
+    """GET JSON(纽约联储 EFFR API)。"""
+    return _http_get(url, "纽约联储 API").json()
+
+
+def _http_get_text(url: str) -> str:
+    """GET 响应文本(CBOE 返回原始 CSV 而非 JSON)。"""
+    return _http_get(url, "CBOE").text
 
 
 def _query_fed_rate(start_date: str | None, end_date: str | None) -> pd.DataFrame:
@@ -175,31 +195,52 @@ def _query_dxy_yfinance(start_date: str | None, end_date: str | None) -> pd.Data
     return df[_DXY_COLUMNS]
 
 
-def _query_dxy(start_date: str | None, end_date: str | None) -> pd.DataFrame:
-    """美元指数:东财首选,Yahoo 回退;两源均失败报网络指引并保留原始异常链。"""
-    sources = (
-        ("东财 index_global_hist_em", lambda: _query_dxy_eastmoney()),
-        (f"yfinance {_DXY_YAHOO_TICKER}", lambda: _query_dxy_yfinance(start_date, end_date)),
-    )
+def _first_available(
+    sources: Sequence[tuple[str, Callable[[], pd.DataFrame]]],
+    what: str,
+    hint: str = "请检查代理/网络后重试",
+) -> pd.DataFrame:
+    """依次尝试多个数据源,返回首个成功结果;全部失败时报含"不可达"的聚合错误并保留异常链。"""
     failures: list[str] = []
     last_exc: Exception | None = None
-    df: pd.DataFrame | None = None
     for name, fetch in sources:
         try:
-            df = fetch()
-            break
+            return fetch()
         except Exception as e:  # noqa: BLE001 - 回退链需吞掉任意源异常
             failures.append(f"{name}({type(e).__name__}: {e})")
             last_exc = e
-    if df is None:
-        raise ValueError(
-            f"dxy 两数据源均失败(依次尝试: {'; '.join(failures)}),该源在当前网络不可达。"
-            "请检查代理/网络后重试(需可达: push2his.eastmoney.com 与 query1.finance.yahoo.com)"
-        ) from last_exc
+    raise ValueError(f"{what}均失败(依次尝试: {'; '.join(failures)}),该源在当前网络不可达。{hint}") from last_exc
+
+
+def _query_dxy(start_date: str | None, end_date: str | None) -> pd.DataFrame:
+    """美元指数:东财首选,Yahoo 回退;两源均失败报网络指引并保留原始异常链。"""
+    df = _first_available(
+        (
+            ("东财 index_global_hist_em", lambda: _query_dxy_eastmoney()),
+            (f"yfinance {_DXY_YAHOO_TICKER}", lambda: _query_dxy_yfinance(start_date, end_date)),
+        ),
+        what="dxy 两数据源",
+        hint="请检查代理/网络后重试(需可达: push2his.eastmoney.com 与 query1.finance.yahoo.com)",
+    )
     df = filter_by_date(df, start_date, end_date)
     df = df.dropna(subset=["close"])  # 与 fed_rate 一致:输出不残留 close 缺失行
     if df.empty:
         raise ValueError(f"dxy 在 {start_date or '最早'}~{end_date or '最新'} 区间无数据")
+    return df.sort_values("date").reset_index(drop=True)
+
+
+def _query_vix(start_date: str | None, end_date: str | None) -> pd.DataFrame:
+    """CBOE 官方 VIX 指数日线(1990-01 起):CSV 直连,输出 date/open/high/low/close 升序。"""
+    text = _http_get_text(_CBOE_VIX_URL)
+    df = pd.read_csv(io.StringIO(text))
+    if df.empty:
+        raise ValueError("CBOE VIX_History.csv 返回空数据")
+    _require_columns(df, list(_CBOE_VIX_COLUMNS), "CBOE VIX_History.csv")
+    df = df.rename(columns=_CBOE_VIX_COLUMNS)[list(_CBOE_VIX_COLUMNS.values())]
+    df = filter_by_date(df, start_date, end_date)
+    df = df.dropna(subset=["close"])  # 与 fed_rate/dxy 一致:输出不残留 close 缺失行
+    if df.empty:
+        raise ValueError(f"vix 在 {start_date or '最早'}~{end_date or '最新'} 区间无数据")
     return df.sort_values("date").reset_index(drop=True)
 
 
@@ -210,10 +251,10 @@ def query_global_rates(
     end_date: str | None = None,
     tenure: str | None = None,
 ) -> tuple[str, str]:
-    """查询全球利率数据(美债收益率/EFFR/美元指数)并输出 CSV。
+    """查询全球利率数据(美债收益率/EFFR/美元指数/VIX)并输出 CSV。
 
     参数:
-        kind: ``us_treasury`` / ``fed_rate`` / ``dxy``(vix 后续任务实现)
+        kind: ``us_treasury`` / ``fed_rate`` / ``dxy`` / ``vix``
         tenure: 仅 us_treasury,``all`` 默认 / 长端 2y/5y/10y/30y / 短端 1m/3m/4m/6m/1y/7y/20y
         start_date/end_date: ``YYYY-MM-DD``
     """
@@ -227,7 +268,7 @@ def query_global_rates(
     elif kind == "dxy":
         df = _query_dxy(start_date, end_date)
     else:
-        raise ValueError("kind=vix 由 Task 3 实现")
+        df = _query_vix(start_date, end_date)
 
     if df.empty:
         raise ValueError(f"No data returned for global_rates kind={kind}")

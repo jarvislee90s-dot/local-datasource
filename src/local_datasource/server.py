@@ -12,7 +12,7 @@
 - ``query_index``：国内指数(沪深/中证系列,日线/分钟)
 - ``query_etf``：A股场内 ETF(日线/分钟)
 - ``query_options``：期权(ETF期权/股指期权:月份/清单/日线)
-- ``query_global_rates``：全球利率(美债收益率曲线/美联储 EFFR)
+- ``query_global_rates``：全球利率(美债收益率曲线/美联储 EFFR/美元指数/VIX)
 
 通过标准 MCP stdio 协议与 Agent 通信。
 """
@@ -266,8 +266,9 @@ def build_tools() -> list[Tool]:
             description=(
                 "Query global rates for backtesting. Output is written to file_path as CSV. "
                 "kind=us_treasury: 美债收益率(2/5/10/30Y 及 10Y-2Y 利差,1990 起;tenure 选期限,短端期限仅近 1000 交易日). "
-                "kind=fed_rate: 美联储 EFFR 有效联邦基金利率(纽约联储 API,2000-07 起). "
-                "kind=dxy/vix: 美元指数/VIX(暂未支持)."
+                "kind=fed_rate: 美联储 EFFR 日频有效联邦基金利率(纽约联储 API,2000-07 起). "
+                "kind=dxy: 美元指数(东财失败自动回退 Yahoo). "
+                "kind=vix: VIX 波动率指数(CBOE 直连,1990 起)."
             ),
             inputSchema={
                 "type": "object",
