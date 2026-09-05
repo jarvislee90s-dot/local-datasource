@@ -24,7 +24,7 @@ import requests
 import yfinance as yf
 
 from local_datasource.formatters import format_csv_output
-from local_datasource.providers.common import filter_by_date
+from local_datasource.providers.common import filter_by_date, require_columns
 
 
 GlobalRatesKind = Literal["us_treasury", "fed_rate", "dxy", "vix"]
@@ -72,14 +72,6 @@ def _check_tenure_scope(kind: str, tenure: str | None) -> None:
         raise ValueError(f"tenure 仅在 kind=us_treasury 时有效, kind={kind} 不支持")
 
 
-def _require_columns(df: pd.DataFrame, required: list[str], source: str,
-                     hint: str = "请检查 akshare 版本") -> None:
-    """上游列漂移守卫:缺列时报可读错误(对齐 futures.py 的版本指引文案)。"""
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        raise ValueError(f"{source} 列名不受支持(缺 {missing}),{hint}")
-
-
 def _query_us_treasury(tenure: str | None, start_date: str | None, end_date: str | None) -> pd.DataFrame:
     """美债收益率:all/长端走东财全表,短端走新浪(仅近 1000 交易日)。"""
     tenure = tenure or "all"
@@ -87,7 +79,7 @@ def _query_us_treasury(tenure: str | None, start_date: str | None, end_date: str
         df = ak.bond_gb_us_sina(symbol=_SHORT_TENURE_SYMBOLS[tenure])
         if df.empty:
             raise ValueError(f"No US treasury data for tenure={tenure}(新浪短端源仅近 1000 交易日)")
-        _require_columns(df, ["date", "close"], "新浪 bond_gb_us_sina")
+        require_columns(df, ["date", "close"], "新浪 bond_gb_us_sina")
         df = filter_by_date(df, start_date, end_date)
         if df.empty:
             raise ValueError(
@@ -106,7 +98,7 @@ def _query_us_treasury(tenure: str | None, start_date: str | None, end_date: str
         raise ValueError("No US treasury data returned by bond_zh_us_rate")
     keep = ["date"] + ([f"us_{tenure}"] if tenure != "all" else list(_EM_US_COLUMNS.values()))
     cn_names = {"date": "日期", **{v: k for k, v in _EM_US_COLUMNS.items()}}
-    _require_columns(df, [cn_names[c] for c in keep], "东财 bond_zh_us_rate")
+    require_columns(df, [cn_names[c] for c in keep], "东财 bond_zh_us_rate")
     df = df.rename(columns={"日期": "date", **_EM_US_COLUMNS})
     df = filter_by_date(df[keep], start_date, end_date)
     return df.sort_values("date").reset_index(drop=True)
@@ -171,7 +163,7 @@ def _query_dxy_eastmoney() -> pd.DataFrame:
     df = ak.index_global_hist_em(symbol="美元指数")
     if df is None or df.empty:
         raise ValueError("东财美元指数(index_global_hist_em)返回空数据")
-    _require_columns(df, list(_EM_DXY_COLUMNS), "东财 index_global_hist_em(美元指数)")
+    require_columns(df, list(_EM_DXY_COLUMNS), "东财 index_global_hist_em(美元指数)")
     return df.rename(columns=_EM_DXY_COLUMNS)[_DXY_COLUMNS]
 
 
@@ -191,7 +183,7 @@ def _query_dxy_yfinance(start_date: str | None, end_date: str | None) -> pd.Data
         df.columns = df.columns.get_level_values(0)
     df = df.reset_index()
     df.columns = [str(c).lower() for c in df.columns]
-    _require_columns(df, _DXY_COLUMNS, f"yfinance {_DXY_YAHOO_TICKER}", hint="请检查 yfinance 版本")
+    require_columns(df, _DXY_COLUMNS, f"yfinance {_DXY_YAHOO_TICKER}", hint="请检查 yfinance 版本")
     return df[_DXY_COLUMNS]
 
 
@@ -235,8 +227,8 @@ def _query_vix(start_date: str | None, end_date: str | None) -> pd.DataFrame:
     df = pd.read_csv(io.StringIO(text))
     if df.empty:
         raise ValueError("CBOE VIX_History.csv 返回空数据")
-    _require_columns(df, list(_CBOE_VIX_COLUMNS), "CBOE VIX_History.csv",
-                     hint="请到 cdn.cboe.com 确认 VIX_History.csv 表头")
+    require_columns(df, list(_CBOE_VIX_COLUMNS), "CBOE VIX_History.csv",
+                    hint="请到 cdn.cboe.com 确认 VIX_History.csv 表头")
     df = df.rename(columns=_CBOE_VIX_COLUMNS)[list(_CBOE_VIX_COLUMNS.values())]
     # CBOE 日期为 US 风格 M/D/YYYY:显式按月前置解析,格式漂移时立即报错而非静默错位
     df["date"] = pd.to_datetime(df["date"], format="%m/%d/%Y").dt.strftime("%Y-%m-%d")

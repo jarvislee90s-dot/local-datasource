@@ -20,7 +20,7 @@ import pandas as pd
 import yfinance as yf
 
 from local_datasource.formatters import format_csv_output
-from local_datasource.providers.common import filter_by_date, to_compact_date
+from local_datasource.providers.common import filter_by_date, require_columns, to_compact_date
 
 
 FxKind = Literal["mid", "bochina", "usdcnh", "cross"]
@@ -48,14 +48,6 @@ _BOC_SINA_COLUMNS = {
 _USDCNH_TICKER = "USDCNH=X"
 
 _MID_UNIT_LINE = "单位：100 外币 = X 人民币（官方中间价口径）"
-
-
-def _require_columns(df: pd.DataFrame, required: list[str], source: str,
-                     hint: str = "请检查 akshare 版本") -> None:
-    """上游列漂移守卫:缺列时报可读错误(对齐 global_rates.py 的版本指引文案)。"""
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        raise ValueError(f"{source} 列名不受支持(缺 {missing}),{hint}")
 
 
 def _select_mid_currencies(currency: str | None) -> list[str]:
@@ -87,14 +79,14 @@ def _query_mid(currency: str | None, start_date: str | None, end_date: str | Non
     df = ak.currency_boc_safe()
     if df is None or df.empty:
         raise ValueError("央行中间价(currency_boc_safe)返回空数据")
-    _require_columns(df, ["日期"], "央行中间价 currency_boc_safe")
+    require_columns(df, ["日期"], "央行中间价 currency_boc_safe")
     unknown = [c for c in df.columns if c != "日期" and c not in _BOC_SAFE_COLUMNS]
     if unknown:
         raise ValueError(
             f"currency_boc_safe 出现未映射币种列 {unknown},请检查 akshare 版本并在 fx.py 补充映射"
         )
     keep_cn = _select_mid_currencies(currency)
-    _require_columns(df, keep_cn, "央行中间价 currency_boc_safe")
+    require_columns(df, keep_cn, "央行中间价 currency_boc_safe")
     df = df.rename(columns={"日期": "date", **_BOC_SAFE_COLUMNS})
     keep = ["date"] + [_BOC_SAFE_COLUMNS[c] for c in keep_cn]
     df = filter_by_date(df[keep], start_date, end_date)
@@ -124,7 +116,7 @@ def _query_bochina(symbol: str | None, start_date: str | None, end_date: str | N
             f"中行牌价(currency_boc_sina, symbol={symbol})在 {start_date}~{end_date} 返回空数据"
             f"(数据约 2012 年起;币种中文名如 '美元'/'港币')"
         )
-    _require_columns(df, list(_BOC_SINA_COLUMNS), "新浪 currency_boc_sina")
+    require_columns(df, list(_BOC_SINA_COLUMNS), "新浪 currency_boc_sina")
     df = filter_by_date(df.rename(columns=_BOC_SINA_COLUMNS), start_date, end_date)
     if df.empty:
         raise ValueError(f"中行牌价 symbol={symbol} 在 {start_date}~{end_date} 区间无数据")
@@ -159,7 +151,7 @@ def _query_yahoo_close(ticker: str, start_date: str | None, end_date: str | None
         df.columns = df.columns.get_level_values(0)
     df = df.reset_index()
     df.columns = [str(c).lower() for c in df.columns]
-    _require_columns(df, ["date", "close"], f"yfinance {ticker}", hint="请检查 yfinance 版本")
+    require_columns(df, ["date", "close"], f"yfinance {ticker}", hint="请检查 yfinance 版本")
     return df[["date", "close"]]
 
 

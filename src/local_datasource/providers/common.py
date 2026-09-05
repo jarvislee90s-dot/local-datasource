@@ -1,4 +1,4 @@
-"""provider 共享工具:日期过滤、分钟深度守卫、腾讯分钟通用路径。
+"""provider 共享工具:日期过滤、上游列守卫、分钟深度守卫、腾讯分钟通用路径。
 
 分钟深度守卫是本仓库的明确设计决策(spec 2026-08-28 第三节):
 请求区间早于数据源实际覆盖时报错并给补数指引,绝不静默返回残缺数据;
@@ -19,6 +19,16 @@ class CoverageError(ValueError):
     继承 ValueError,存量 ``except ValueError`` 行为不变。
     message 固定含覆盖区间(``YYYY-MM-DD``)与"补数"指引。
     """
+
+
+def require_columns(
+    df: pd.DataFrame, expected_columns: list[str], subject: str,
+    hint: str = "请检查 akshare 版本",
+) -> None:
+    """上游列漂移守卫:缺列时报可读错误(缺失列 + 数据源 + 版本指引)。"""
+    missing = [c for c in expected_columns if c not in df.columns]
+    if missing:
+        raise ValueError(f"{subject} 列名不受支持(缺 {missing}),{hint}")
 
 
 def filter_by_date(

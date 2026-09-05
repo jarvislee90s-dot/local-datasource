@@ -11,13 +11,14 @@
 """
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 import akshare as ak
 import pandas as pd
 
 from local_datasource.formatters import format_csv_output
-from local_datasource.providers.common import filter_by_date
+from local_datasource.providers.common import filter_by_date, require_columns
 
 
 SpotKind = Literal["sge", "sy"]
@@ -39,14 +40,6 @@ _SY_OUTPUT_COLUMNS = [
 
 # sy 单次请求区间上限:365 天(366 天起报错);源逐日抓取,过慢
 _SY_MAX_SPAN_DAYS = 365
-
-
-def _require_columns(df: pd.DataFrame, required: list[str], source: str,
-                     hint: str = "请检查 akshare 版本") -> None:
-    """上游列漂移守卫:缺列时报可读错误(对齐 fx.py/global_rates.py 的文案)。"""
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        raise ValueError(f"{source} 列名不受支持(缺 {missing}),{hint}")
 
 
 def _check_param_scope(kind: str, symbol: str | None, symbols: list[str] | None) -> None:
@@ -84,7 +77,7 @@ def _query_sge(symbol: str | None, start_date: str | None, end_date: str | None)
     df = ak.spot_hist_sge(symbol=symbol)
     if df is None or df.empty:
         raise ValueError(f"上金所现货(spot_hist_sge, symbol={symbol})返回空数据")
-    _require_columns(df, _SGE_SOURCE_COLUMNS, "上金所 spot_hist_sge")
+    require_columns(df, _SGE_SOURCE_COLUMNS, "上金所 spot_hist_sge")
     df = filter_by_date(df[_SGE_OUTPUT_COLUMNS], start_date, end_date)
     if df.empty:
         raise ValueError(
@@ -120,6 +113,13 @@ def _query_sy(symbols: list[str] | None, start_date: str | None, end_date: str |
         raise ValueError(
             "kind=sy 需提供 start_date 与 end_date(YYYY-MM-DD;生意社源按日抓取,区间最长 1 年)"
         )
+    # pd.Timestamp 对 "20260101"/"2026/01/01" 等宽松解析,而后续过滤是字符串比较,
+    # 会静默过滤掉全部行并误报"区间无数据" → 区间检查前先严格校验格式
+    for label, value in (("start_date", start_date), ("end_date", end_date)):
+        try:
+            datetime.strptime(value, "%Y-%m-%d")
+        except (TypeError, ValueError):
+            raise ValueError(f"{label}({value})日期格式需为 YYYY-MM-DD") from None
     span = (pd.Timestamp(end_date) - pd.Timestamp(start_date)).days
     if span < 0:
         raise ValueError(f"start_date({start_date})不能晚于 end_date({end_date})")
@@ -136,7 +136,7 @@ def _query_sy(symbols: list[str] | None, start_date: str | None, end_date: str |
             f"在 {start_date}~{end_date} 返回空数据"
             f"(请确认品种代码与区间;数据自 2011-01-04 起,非交易日无数据)"
         )
-    _require_columns(df, _SY_OUTPUT_COLUMNS, "生意社 futures_spot_price_daily")
+    require_columns(df, _SY_OUTPUT_COLUMNS, "生意社 futures_spot_price_daily")
     df = filter_by_date(df[_SY_OUTPUT_COLUMNS], start_date, end_date)
     if df.empty:
         raise ValueError(f"生意社现货 {symbols} 在 {start_date}~{end_date} 区间无数据")

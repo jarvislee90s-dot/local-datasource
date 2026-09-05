@@ -53,7 +53,7 @@ def _normalize_dates(df: pd.DataFrame, source: str) -> pd.Series:
     ts = pd.to_datetime(df[name], errors="coerce")
     bad = ts.isna()
     if bad.any():
-        first_bad = df[name][bad].iloc[0]
+        first_bad = df.loc[bad, name].iloc[0]
         raise ValueError(f"{source} 日期列存在无法解析的值: {first_bad!r}")
     return ts.dt.strftime("%Y-%m-%d")
 
@@ -127,6 +127,8 @@ def align_series(
     output_names = names if names is not None else [Path(p).stem for p in file_paths]
     if len(set(output_names)) != len(output_names):
         raise ValueError(f"输出列名存在重复(默认取文件名 stem,可用 names 显式指定): {output_names}")
+    if "date" in output_names:
+        raise ValueError("输出列名不能为 'date'（保留为日期列）")
 
     series_list = [
         _load_series(Path(p), column, name)
