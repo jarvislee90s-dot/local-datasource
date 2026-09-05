@@ -1,6 +1,6 @@
 """MCP Server 入口。
 
-注册 14 个数据查询 tool：
+注册 15 个 tool：
 - ``query_stock``：A 股 / 港股 / 美股
 - ``query_yfinance``：美股/全球资产（默认 akshare，可选 yfinance）
 - ``query_worldbank``：世界银行宏观指标
@@ -15,6 +15,7 @@
 - ``query_global_rates``：全球利率(美债收益率曲线/美联储 EFFR/美元指数/VIX)
 - ``query_fx``：外汇(人民币中间价/中行牌价/离岸 USDCNH/交叉盘)
 - ``query_spot``：现货(上金所贵金属/生意社大宗含基差)
+- ``align_series``：多序列对齐合并(宽表/并集交集/前向填充/周月重采样,纯本地)
 
 通过标准 MCP stdio 协议与 Agent 通信。
 """
@@ -31,6 +32,7 @@ from mcp.types import (
 from mcp.server import Server
 
 from local_datasource.config import load_config
+from local_datasource.providers.align import align_series
 from local_datasource.providers.arxiv import query_arxiv
 from local_datasource.providers.bond import query_bond
 from local_datasource.providers.convertible_bond import query_convertible_bond
@@ -331,6 +333,27 @@ def build_tools() -> list[Tool]:
                 "required": ["kind", "file_path"],
             },
         ),
+        Tool(
+            name="align_series",
+            description=(
+                "把本库产出的多份 CSV 按日期对齐合并成一张宽表(默认各取 close 列),"
+                "支持并集/交集、前向填充、重采样到周(周五)/月(取期末交易日);"
+                "纯本地计算,不联网。输出写入 file_path 为 CSV。"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file_paths": {"type": "array", "items": {"type": "string"}, "description": "Input CSV paths (>= 2) produced by this library; first column must be date/datetime/日期"},
+                    "file_path": {"type": "string", "description": "Output CSV file path"},
+                    "columns": {"type": "array", "items": {"type": "string"}, "description": "Value column per input file, aligned with file_paths; default close for each"},
+                    "names": {"type": "array", "items": {"type": "string"}, "description": "Output column name per input file, aligned with file_paths; default file name stem"},
+                    "align": {"type": "string", "enum": ["outer", "inner"], "default": "outer", "description": "Join on date: outer (union, missing = NaN) or inner (intersection)"},
+                    "fill": {"type": "string", "enum": ["none", "ffill"], "default": "none", "description": "Forward-fill value columns after join (leading NaN stays NaN)"},
+                    "resample": {"type": "string", "enum": ["none", "week", "month"], "default": "none", "description": "Per-series resample before join: week (W-FRI) or month; keeps each period's last actual trading day"},
+                },
+                "required": ["file_paths", "file_path"],
+            },
+        ),
     ]
 
 
@@ -367,6 +390,8 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             _, summary = query_fx(**arguments)
         elif name == "query_spot":
             _, summary = query_spot(**arguments)
+        elif name == "align_series":
+            _, summary = align_series(**arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
         return [TextContent(type="text", text=summary)]
