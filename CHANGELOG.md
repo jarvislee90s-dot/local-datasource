@@ -2,6 +2,20 @@
 
 本项目的显著变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)，条目按功能里程碑组织。
 
+## [进行中] 回测数据源扩展（三期）
+
+### 新增
+
+- `query_global_rates`：全球利率与波动率——`kind=us_treasury` 美债收益率（2/5/10/30Y 及 10Y-2Y 利差，1990 起；`tenure` 可选期限，短端仅近 1000 交易日）、`kind=fed_rate` 美联储 EFFR 日频（纽约联储官方 API，免 key，2000-07 起）、`kind=dxy` 美元指数（东财失败自动回退 Yahoo）、`kind=vix` VIX 波动率指数（CBOE 官方直连，1990 起）
+- `query_fx`：汇率——`kind=mid` 央行官方中间价（1994 起，25 币种，单位为 100 外币）、`kind=bochina` 中行牌价（起止日期必填：akshare 缺省是任取的示例区间，静默透传会拿到错数据）、`kind=usdcnh` 离岸人民币与 `kind=cross` 交叉盘（Yahoo）
+- `query_spot`：商品现货——`kind=sge` 上金所贵金属现货日线（2016-12 起约 10 年深度）、`kind=sy` 生意社大宗现货（含现货价/主力合约价/基差；起止日期必填，单次区间最长 1 年）
+- `align_series`：多份本库产出的 CSV 按日期对齐合并成宽表（纯本地计算不联网）——并集/交集、前向填充、周/月重采样（每期保留最后一个实际交易日，回测日期真实可成交）
+
+### 变更
+
+- 期货主连日线输出列名归一：中文列（日期/开盘价/…/动态结算价）→ 与单合约一致的 8 列 `date,open,high,low,close,volume,hold,settle`（含上游列漂移守卫）；单合约路径列名不变。主连为全历史（自品种上市日或 2005-01-04 取较早，共 83 个主连品种；IF0 特例仅自 2017-01-17 起），quant-chart 消费契约明确排除主连日线，列名变更无存量消费方风险
+- 存量文档实测口径修正：删除过时的"主连约 158 日"说法（README/SKILL.md/server.py/futures.py，实测主连日线为全历史）；标注 A 股日线含 `turnover`/`outstanding_share`/`amount`（筹码分布等衍生计算依赖已满足）；新增"网络环境已知风险"小节（东财非 A 股端点部分网络被拒、金十美联储决议源 2025-09 起停更已改用纽约联储 EFFR、FRED/treasury.gov/stooq 本机实测不可达——本轮海外源选 CBOE/纽约联储直连可达即基于此）；README/SKILL.md 工具数与数据源列表同步至 15 tools
+
 ## [2026-08-28] 品种覆盖扩展（二期，7 → 11 tools）
 
 关联：[issue #1](https://github.com/jarvislee90s-dot/local-datasource/issues/1)；spec：`docs/superpowers/specs/2026-08-28-品种覆盖扩展-design.md`

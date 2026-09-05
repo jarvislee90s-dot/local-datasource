@@ -1,6 +1,8 @@
 """国内期货 provider:单合约/主连行情 + 合约清单。
 
-- hist·daily:单合约全历史(新浪,自上市含持仓量);主连约 158 日(新浪)
+- hist·daily:单合约/主连全历史(新浪,自上市含持仓量);主连自品种上市日
+  (或 2005-01-04,取较早)起,共 83 个主连品种,IF0 特例仅自 2017-01-17;
+  两种路径输出同一组 8 列 date..settle
 - hist·min:新浪源,约 4 个交易日,超覆盖按守卫报错
 - contracts:交易所官方挂牌表(CFFEX/CZCE/SHFE/INE/DCE/GFEX),按品种前缀过滤
 
@@ -20,6 +22,7 @@ from local_datasource.providers.common import (
     filter_by_date,
     filter_by_datetime,
     guard_minute_depth,
+    require_columns,
     require_minute_range,
     to_compact_date,
     validate_period,
@@ -28,6 +31,12 @@ from local_datasource.providers.common import (
 
 FuturesKind = Literal["hist", "contracts"]
 FuturesPeriod = Literal["daily", "min"]
+
+# 主连日线:新浪中文列 → 与单合约一致的 8 列契约(顺序固定,作为消费方读列依据)
+_MAIN_DAILY_COLUMNS = {
+    "日期": "date", "开盘价": "open", "最高价": "high", "最低价": "low",
+    "收盘价": "close", "成交量": "volume", "持仓量": "hold", "动态结算价": "settle",
+}
 
 # 品种前缀 → 交易所(kind=contracts 路由)。未收录品种报错提示补充映射。
 _VARIETY_EXCHANGE: dict[str, list[str]] = {
@@ -77,14 +86,19 @@ def _exchange_of_variety(variety: str) -> str:
 
 
 def _query_hist_daily(code: str, start_date: str | None, end_date: str | None) -> pd.DataFrame:
-    """日线:``IM0`` 走主连接口(约 158 日),其余走单合约全历史。"""
+    """日线:``IM0`` 走主连接口(全历史,自品种上市日或 2005-01-04 取较早),
+    其余走单合约全历史;两条路径输出同一组 8 列 date..settle(列名归一契约)。"""
     if re.fullmatch(r"[A-Z]{1,2}0", code):
         df = ak.futures_main_sina(
             symbol=code,
             start_date=to_compact_date(start_date) if start_date else "19900101",
             end_date=to_compact_date(end_date) if end_date else datetime.now().strftime("%Y%m%d"),
         )
-        date_col = "日期"
+        if df.empty:
+            raise ValueError(f"No daily data for futures {code}")
+        require_columns(df, list(_MAIN_DAILY_COLUMNS), "新浪 futures_main_sina")
+        df = df.rename(columns=_MAIN_DAILY_COLUMNS)[list(_MAIN_DAILY_COLUMNS.values())]
+        date_col = "date"
     else:
         df = ak.futures_zh_daily_sina(symbol=code)
         date_col = "date"

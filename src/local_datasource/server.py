@@ -187,7 +187,7 @@ def build_tools() -> list[Tool]:
             name="query_futures",
             description=(
                 "Query China futures. Output is written to file_path as CSV. "
-                "kind=hist: 单合约/主连行情(period=daily 全历史/约158日, period=min 约4交易日需起止日期). "
+                "kind=hist: 单合约/主连日线全历史(主连自品种上市日或2005-01-04起,IF0特例仅2017-01-17起; period=min 约4交易日需起止日期). "
                 "kind=contracts: 品种挂牌合约清单(如 IM/RB). "
                 "分钟超覆盖时明确报错并给补数指引,不静默降级."
             ),

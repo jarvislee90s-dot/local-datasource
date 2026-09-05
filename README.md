@@ -6,7 +6,7 @@
 
 ## 一句话介绍
 
-`local-datasource` 把 `akshare`、`yfinance`、`wbgapi`、`arxiv` 等免费公开接口封装成 11 个标准 MCP tool，Agent 只需要像调用本地函数一样请求数据，即可获得结构化 CSV 输出。
+`local-datasource` 把 `akshare`、`yfinance`、`wbgapi`、`arxiv` 等免费公开接口封装成 15 个标准 MCP tool，覆盖 A股/港股/美股/ETF/期货/指数/期权行情、债券与可转债、全球利率与波动率（美债收益率/美联储利率/美元指数/VIX）、汇率、商品现货、多序列对齐合并、世界银行宏观指标与 arXiv 论文，Agent 只需要像调用本地函数一样请求数据，即可获得结构化 CSV 输出。
 
 ---
 
@@ -41,6 +41,10 @@
 - ✅ **A股场内 ETF**：日线（2012 起全历史）与分钟。
 - ✅ **期权**：ETF 期权与股指期权（IO/HO/MO）的到期月份、合约清单、单合约日线。
 - ✅ **A股个股分钟**：`query_stock(period=min)`，与日线同一入口。
+- ✅ **全球利率与波动率**：美债收益率曲线、美联储 EFFR、美元指数（东财失败回退 Yahoo）、VIX（CBOE 直连）。
+- ✅ **汇率**：央行官方中间价、中行牌价、离岸 USDCNH、主要货币对交叉盘。
+- ✅ **商品现货**：上金所贵金属日线、生意社大宗现货（含主力合约价与基差）。
+- ✅ **对齐合并**：多份本库产出的 CSV 按日期合并成宽表（支持周/月重采样），纯本地计算。
 - ✅ **金融输入归一化**：股票/债券的名称、简称、全称、发行人 → 统一代码（`resolve_stock_code` + `bond_issue`）。
 - ✅ **统一 CSV 输出**：每个 tool 都把结果写到 `file_path`，并返回前 5 行预览。
 - ✅ **零 API Key**：所有默认数据源均免费使用。
@@ -85,7 +89,7 @@ local-datasource
 
 | 数据类型 | 工具 | 底层接口 | 是否需 API Key |
 |---|---|---|---|
-| A股（日线/分钟）/ 港股 / 美股 历史行情 | `query_stock` | `akshare` | 否 |
+| A股（日线含换手率/流通股本/成交额，分钟）/ 港股 / 美股 历史行情 | `query_stock` | `akshare` | 否 |
 | 美股 / 美股 ETF / 全球资产 | `query_yfinance` | `akshare`（默认）/ `yfinance`（备选） | 否 |
 | 世界银行宏观指标 | `query_worldbank` | `wbgapi` | 否 |
 | arXiv 学术论文 | `query_arxiv` | `arxiv` | 否 |
@@ -98,6 +102,8 @@ local-datasource
 | 期权（ETF期权/股指期权：月份/清单/日线） | `query_options` | `akshare`（新浪/上交所/CFFEX） | 否 |
 | 美债收益率/美联储 EFFR/美元指数/VIX（全球利率与波动率） | `query_global_rates` | 东财数据中心 / 新浪 / 纽约联储 / CBOE / yfinance（回退） | 否 |
 | 汇率（官方中间价/中行牌价/离岸 USDCNH/主要货币对） | `query_fx` | 外汇局 / 新浪 / yfinance | 否 |
+| 商品现货（上金所贵金属/生意社大宗含基差） | `query_spot` | `akshare`（上金所/生意社 100ppi） | 否 |
+| 多序列对齐合并（宽表/重采样，纯本地） | `align_series` | 本地 `pandas` 计算（不联网） | 否 |
 
 ---
 
@@ -125,9 +131,9 @@ Agent（Claude Code / Codex / Cursor / OpenCode 等）
         ↓ MCP stdio
 local-datasource（本仓库）
         ↓ 直接调用
-akshare / yfinance / wbgapi / arxiv
+akshare / yfinance / wbgapi / arxiv / requests（HTTP 直连）
         ↓ 原始数据源
-新浪 / 腾讯 / 交易所官网 / 中证指数 / 同花顺 / Yahoo Finance / World Bank / arxiv.org
+新浪 / 腾讯 / 东财数据中心 / 交易所官网 / 中证指数 / 同花顺 / 外汇局 / 上金所 / 生意社 / 纽约联储 / CBOE / Yahoo Finance / World Bank / arxiv.org
 ```
 
 ---
@@ -156,7 +162,11 @@ akshare / yfinance / wbgapi / arxiv
 │       ├── futures.py              # 国内期货（行情/合约清单）
 │       ├── index.py                # 国内指数（沪深/中证系列）
 │       ├── etf.py                  # A股场内 ETF
-│       └── options.py              # 期权（ETF/股指：月份/清单/日线）
+│       ├── options.py              # 期权（ETF/股指：月份/清单/日线）
+│       ├── global_rates.py         # 全球利率（美债收益率/美联储 EFFR/美元指数/VIX）
+│       ├── fx.py                   # 外汇（中间价/中行牌价/离岸 USDCNH/交叉盘）
+│       ├── spot.py                 # 现货（上金所贵金属/生意社大宗含基差）
+│       └── align.py                # 多序列对齐合并（宽表/重采样，纯本地）
 └── demos/                          # 示例脚本
     └── mcp_query_demo.py           # 多资产查询 + 归一化走势图
 ```
@@ -485,6 +495,33 @@ Tool：`query_global_rates`（kind=`us_treasury`，`tenure: all` 返回 2/5/10/3
 
 Tool：`query_fx`（kind=`mid` 外汇局官方中间价，1994 年起，单位为 100 外币 = X 人民币；kind=`bochina` 中行牌价需 `symbol` 如"美元"且起止日期必填；kind=`usdcnh`/`cross` 走 Yahoo，不可达时明确报错）
 
+### 查询现货黄金：上金所 Au99.99
+
+```json
+{
+  "kind": "sge",
+  "symbol": "Au99.99",
+  "file_path": "/tmp/au9999.csv"
+}
+```
+
+Tool：`query_spot`（kind=`sge` 上金所贵金属日线，2016-12 起约 10 年深度；kind=`sy` 生意社大宗现货含主力合约价与基差，需 `symbols: ["CU","RB"]` 且起止日期必填、单次区间最长 1 年）
+
+### 对齐合并多份行情 CSV 为宽表
+
+```json
+{
+  "file_paths": ["/tmp/moutai.csv", "/tmp/gld.csv"],
+  "columns": ["close", "close"],
+  "names": ["moutai", "gld"],
+  "align": "outer",
+  "fill": "ffill",
+  "file_path": "/tmp/merged.csv"
+}
+```
+
+Tool：`align_series`（纯本地合并不联网；`columns`/`names` 与 `file_paths` 一一对应，缺省各取 `close`、列名用文件名；`resample: "week"/"month"` 重采样时每期取最后一个实际交易日）
+
 ---
 
 参考 `demos/mcp_query_demo.py`：它通过 MCP 调用多个工具，读取生成的 CSV，计算归一化价格，并绘制对比图。
@@ -538,14 +575,24 @@ LOCAL_DATASOURCE_CONFIG=/path/to/config.yaml local-datasource
 python -m pytest tests/ -v
 ```
 
-包含配置加载、格式化、10 个 provider 的集成测试、MCP server 工具注册（11 个 tool）。
+包含配置加载、格式化、14 个 provider 的测试、MCP server 工具注册（15 个 tool）。
+
+---
+
+## 网络环境已知风险
+
+以下为在本机实测（2026-09）确认的数据源网络情况，也是本轮海外数据源选型的依据（CBOE、纽约联储直连可达）：
+
+- **东财非 A 股端点部分网络被拒**：东财的全球指数/期货 K 线等非 A 股端点在部分网络环境下不可达（A 股相关端点不受影响）。美元指数已内置 Yahoo 自动回退。
+- **金十美联储决议源 2025-09 起停更**：美联储利率已改用纽约联储官方 EFFR API（免 key 直连）。
+- **FRED / treasury.gov / stooq 在本机实测不可用**：美债收益率走东财全表（1990 起，短端走新浪），VIX 走 CBOE 官方 CSV 直连，不依赖上述源。
 
 ---
 
 ## 注意事项
 
 - **分钟数据深度有限**（免费源天花板）：期货分钟约 4 个交易日，腾讯源（个股/指数/ETF）约 8 个交易日。请求区间超出覆盖时会**明确报错并提示从 Wind/终端导出 Excel 补数**，不会静默返回残缺数据。
-- **慢源与已知限制**：中证系列指数日线走中证官网（约 10 秒，无分钟）；期货主连仅约 158 日；ETF 日线无复权（原始价）；期权仅日线。
+- **慢源与已知限制**：中证系列指数日线走中证官网（约 10 秒，无分钟）；ETF 日线无复权（原始价）；期权仅日线。期货主连日线为全历史：自品种上市日（或 2005-01-04，取较早）至今，共 83 个主连品种（IF0 特例仅自 2017-01-17 起）。
 - `yfinance` 容易被 Yahoo Finance 限流，因此默认优先使用 `akshare`。
 - `akshare` 的接口可能随时间变化，建议定期更新到较新版本。
 - World Bank 和 arXiv 通常稳定且无需 API key。
@@ -559,7 +606,7 @@ python -m pytest tests/ -v
 | 运行位置 | 本机 | Kimi Code 云端 |
 | 登录/账号 | 不需要 | 需要 Kimi Code 账号 |
 | 费用 | 免费（受公开接口限额影响） | 消耗 Kimi Code 额度 |
-| 数据源 | A/HK/US 股票、境内债券/可转债、期货、指数、A股 ETF、期权、美股/全球资产、World Bank、arXiv | 更多，包括天眼查、Google Scholar、元典法律等 |
+| 数据源 | A/HK/US 股票、境内债券/可转债、期货、指数、A股 ETF、期权、美股/全球资产、全球利率与波动率（美债/EFFR/美元指数/VIX）、汇率、商品现货（贵金属/大宗含基差）、World Bank、arXiv | 更多，包括天眼查、Google Scholar、元典法律等 |
 | 数据链路 | Agent → 本地 Server → 公开接口 | Agent → Kimi 云服务 → 后端数据源 |
 | 可定制性 | 源码本地可见，可修改/扩展 | 黑盒，只能使用官方暴露的 tool |
 | 跨 Agent 复用 | 标准 MCP Server，可被多家 Agent 复用 | 仅限 Kimi Code 内部 |
