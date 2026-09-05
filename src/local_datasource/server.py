@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from typing import Any
 
 from mcp.server.stdio import stdio_server
@@ -420,7 +421,15 @@ async def _main() -> None:
 
 
 def main() -> None:
-    """同步入口：console script 直接调用此函数。"""
+    """同步入口：console script 直接调用此函数。
+
+    ``local-datasource download ...`` 转交 download 批量下载 CLI;
+    无参数(或其它参数)时保持原行为:启动 MCP stdio server。
+    """
+    if len(sys.argv) > 1 and sys.argv[1] == "download":
+        from local_datasource.cli import run_download
+
+        raise SystemExit(run_download(sys.argv[2:]))
     asyncio.run(_main())
 
 

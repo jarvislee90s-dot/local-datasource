@@ -53,8 +53,9 @@ def make_key(tool: str, args: dict) -> str:
     规则:
     - 跳过值为 ``None`` 的参数;键按排序拼接,与传入顺序无关(同参数同 key)。
     - 每段清洗为 ``[A-Za-z0-9._-]`` 以外字符替换为 ``-``,不含路径分隔符。
-    - 可读部分超过 120 字符时截断;另外只要清洗发生(或截断),
-      就追加规范化串的 md5 前 8 位,防止清洗碰撞破坏唯一性。
+    - 可读部分超过 120 字符时截断。
+    - 末尾**总是**追加规范化串的 md5 前 8 位(如 ``query_stock-adjust-qfq-3f2a1b0c``):
+      可读性保留的同时,清洗碰撞/截断不再可能破坏唯一性。
     """
     canonical = "&".join(
         f"{k}={_normalize_value(args[k])}"
@@ -65,17 +66,12 @@ def make_key(tool: str, args: dict) -> str:
     for k in sorted(args):
         if args[k] is None:
             continue
-        raw = f"{k}-{_normalize_value(args[k])}"
-        cleaned = _sanitize(raw)
-        segments.append(cleaned)
-        if cleaned != raw:
-            segments.append("")  # 标记发生了有损清洗
-    key = "-".join(s for s in segments if s != "")
-    lossy = "" in segments
+        segments.append(_sanitize(f"{k}-{_normalize_value(args[k])}"))
+    readable = "-".join(s for s in segments if s)
+    if len(readable) > _KEY_MAX_LEN:
+        readable = readable[:_KEY_MAX_LEN].rstrip("-")
     digest = hashlib.md5(canonical.encode("utf-8")).hexdigest()[:_HASH_LEN]
-    if lossy or len(key) > _KEY_MAX_LEN:
-        key = f"{key[:_KEY_MAX_LEN].rstrip('-')}-{digest}"
-    return key or digest
+    return f"{readable or digest}-{digest}"
 
 
 def cache_paths(data_dir: str, tool: str, key: str) -> tuple[Path, Path]:
@@ -87,9 +83,9 @@ def cache_paths(data_dir: str, tool: str, key: str) -> tuple[Path, Path]:
 def is_fresh(manifest: dict | None) -> bool:
     """manifest 的 ``last_fetched`` 日期(ISO 字符串)等于今天才视为新鲜。
 
-    ``None``(未缓存)与缺失/异常字段一律视为不新鲜。
+    ``None``、非 dict(如误传入字符串)与缺失/异常字段一律视为不新鲜。
     """
-    if not manifest:
+    if not isinstance(manifest, dict) or not manifest:
         return False
     today = datetime.now().strftime("%Y-%m-%d")
     return manifest.get("last_fetched") == today
@@ -142,8 +138,11 @@ def write_manifest(
         "last_date": last_date,
         "last_fetched": datetime.now().strftime("%Y-%m-%d"),
     }
+    # 先整体序列化成字符串再落盘:args 含不可 JSON 序列化的值时,
+    # 在触碰任何文件之前就抛错,不会留下截断的半截 manifest。
+    payload = json.dumps(manifest, ensure_ascii=False, indent=2)
     _, manifest_path = cache_paths(data_dir, tool, key)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, ensure_ascii=False, indent=2)
+        f.write(payload)
     return manifest_path

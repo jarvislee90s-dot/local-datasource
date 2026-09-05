@@ -149,6 +149,8 @@ akshare / yfinance / wbgapi / arxiv / requests（HTTP 直连）
 ├── config.yaml                     # 可选配置文件
 ├── src/local_datasource/           # MCP server 源码
 │   ├── server.py                   # 服务入口：注册 tools、处理调用
+│   ├── cli.py                      # download 批量下载子命令（唯一写缓存的入口）
+│   ├── cache.py                    # 下载缓存纯函数：key/路径/manifest/新鲜度
 │   ├── config.py                   # 加载 config.yaml / 环境变量
 │   ├── formatters.py               # 统一 CSV 输出与预览
 │   └── providers/                  # 各数据源适配器
@@ -213,6 +215,55 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
 ```
 
 若返回初始化结果，说明服务正常。
+
+---
+
+## 批量下载（download 命令）
+
+除了作为 MCP 服务被 Agent 调用，本库还提供一个**批量下载子命令**，把常用数据在本地预取成 CSV 缓存，供回测、研究复用：
+
+```bash
+local-datasource download --config FILE [--data-dir DIR] [--force]
+```
+
+- `--config`（必填）：清单 YAML 路径
+- `--data-dir`：缓存根目录；优先级 **CLI `--data-dir` > 清单顶层 `data_dir` > `config.yaml` 的 `cache.data_dir`**
+- `--force`：忽略"当天已拉取"的新鲜度判断，强制重新下载
+
+清单 YAML 格式（`assets` 列表，每条 `{tool, args, start_date?, end_date?}`）：
+
+```yaml
+# batch.yaml
+data_dir: ./datasource-cache   # 顶层可选；CLI --data-dir 优先
+assets:
+  - tool: query_global_rates
+    args: {kind: us_treasury, tenure: all}
+  - tool: query_stock
+    args: {ticker: "600519", market: a, adjust: qfq, period: daily}
+    start_date: "2025-01-01"   # 可选：合并进 args；与 args 内同名值同时存在时,这里优先
+    end_date: "2025-12-31"
+  - tool: query_fx
+    args: {kind: mid, currency: usd,eur}
+```
+
+支持的 `tool` 白名单为 13 个查询工具（`query_stock`/`query_yfinance`/`query_worldbank`/`query_arxiv`/`query_bond`/`query_convertible_bond`/`query_futures`/`query_index`/`query_etf`/`query_options`/`query_global_rates`/`query_fx`/`query_spot`）。`resolve_stock_code`（名称反查）、`align_series`（本地对齐）、`query_trading_rules`（M4 静态规则表）**不支持**出现在清单中——它们不产出待缓存的行情序列。未知 tool 名、缺 `args` 会在启动时一次性报错并列出合法 tool 名，校验全部通过后才开始下载。
+
+每条目输出一行状态：
+
+- `SKIP <tool>/<key>`：当天已拉取过（manifest 的 `last_fetched` 为今天）且未 `--force`，直接复用缓存
+- `FETCH <tool>/<key> <rows> rows`：调用 provider 下载并写入缓存
+- `FAIL <tool>/<key> <error>`：该条目失败；**单条失败不中断整批**，全部条目跑完后只要存在失败，退出码为 `1`（全部成功 `0`，清单/用法错误 `2`）
+
+缓存目录布局：每条目落在 `<data_dir>/<tool>/<key>.csv`，旁边有同名的 `<key>.manifest.json` 元信息（含 args、行数、首末日期、`last_fetched`）。`key` 由工具名与参数生成，可读且末尾带 8 位哈希，例如：
+
+```
+datasource-cache/
+└── query_global_rates/
+    ├── query_global_rates-kind-us_treasury-tenure-all-1a2b3c4d.csv
+    └── query_global_rates-kind-us_treasury-tenure-all-1a2b3c4d.manifest.json
+```
+
+> **架构说明**：MCP 查询路径**不做任何缓存**，永远直连数据源；`download` 是唯一写缓存的入口。缓存仅供用户显式预取/复用，不会让 Agent 拿到过期数据。
 
 ---
 
@@ -546,7 +597,13 @@ providers:
   yahoo:
     # 默认使用 akshare。设为 true 则默认使用 yfinance。
     use_yfinance: false
+cache:
+  # download 批量下载的缓存根目录（默认 ./datasource-cache）。
+  # 仅 download CLI 使用；MCP 查询不读写缓存。
+  data_dir: ./datasource-cache
 ```
+
+`cache.data_dir` 只影响 `local-datasource download`（见上文"批量下载"）；清单顶层 `data_dir` 与 CLI `--data-dir` 都比它优先。
 
 也可通过环境变量指定配置文件：
 
