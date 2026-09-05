@@ -96,6 +96,8 @@ local-datasource
 | 国内指数（沪深/中证系列，日线/分钟） | `query_index` | `akshare`（新浪/腾讯/中证官网） | 否 |
 | A股场内 ETF（日线/分钟） | `query_etf` | `akshare`（新浪/腾讯） | 否 |
 | 期权（ETF期权/股指期权：月份/清单/日线） | `query_options` | `akshare`（新浪/上交所/CFFEX） | 否 |
+| 美债收益率/美联储 EFFR/美元指数/VIX（全球利率与波动率） | `query_global_rates` | 东财数据中心 / 新浪 / 纽约联储 / CBOE / yfinance（回退） | 否 |
+| 汇率（官方中间价/中行牌价/离岸 USDCNH/主要货币对） | `query_fx` | 外汇局 / 新浪 / yfinance | 否 |
 
 ---
 
@@ -458,6 +460,30 @@ Tool：`query_etf`（日线去 `period/freq` 加日期区间；日线源无复�
 ```
 
 Tool：`query_options`（合约清单 `kind: contracts`；日线 `kind: hist, symbol: "IO2706-P-5600"`）
+
+### 查询美债收益率
+
+```json
+{
+  "kind": "us_treasury",
+  "tenure": "all",
+  "file_path": "/tmp/us_treasury.csv"
+}
+```
+
+Tool：`query_global_rates`（kind=`us_treasury`，`tenure: all` 返回 2/5/10/30 年及 10Y-2Y 利差，1990 年起；短端期限如 `3m` 仅近 1000 交易日；kind=`fed_rate`/`dxy`/`vix` 分别查美联储 EFFR、美元指数（东财失败自动回退 Yahoo）、VIX（CBOE 直连，1990 起））
+
+### 查询汇率中间价
+
+```json
+{
+  "kind": "mid",
+  "currency": "usd,eur",
+  "file_path": "/tmp/fx_mid.csv"
+}
+```
+
+Tool：`query_fx`（kind=`mid` 外汇局官方中间价，1994 年起，单位为 100 外币 = X 人民币；kind=`bochina` 中行牌价需 `symbol` 如"美元"且起止日期必填；kind=`usdcnh`/`cross` 走 Yahoo，不可达时明确报错）
 
 ---
 

@@ -235,8 +235,11 @@ def _query_vix(start_date: str | None, end_date: str | None) -> pd.DataFrame:
     df = pd.read_csv(io.StringIO(text))
     if df.empty:
         raise ValueError("CBOE VIX_History.csv 返回空数据")
-    _require_columns(df, list(_CBOE_VIX_COLUMNS), "CBOE VIX_History.csv")
+    _require_columns(df, list(_CBOE_VIX_COLUMNS), "CBOE VIX_History.csv",
+                     hint="请到 cdn.cboe.com 确认 VIX_History.csv 表头")
     df = df.rename(columns=_CBOE_VIX_COLUMNS)[list(_CBOE_VIX_COLUMNS.values())]
+    # CBOE 日期为 US 风格 M/D/YYYY:显式按月前置解析,格式漂移时立即报错而非静默错位
+    df["date"] = pd.to_datetime(df["date"], format="%m/%d/%Y").dt.strftime("%Y-%m-%d")
     df = filter_by_date(df, start_date, end_date)
     df = df.dropna(subset=["close"])  # 与 fed_rate/dxy 一致:输出不残留 close 缺失行
     if df.empty:
