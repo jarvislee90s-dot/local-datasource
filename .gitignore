@@ -55,3 +55,6 @@ Reference/
 tests/
 demos/connectivity_report.md
 demos/test_data_connectivity.py
+
+# Playwright MCP page snapshots
+.playwright-mcp/

@@ -35,12 +35,12 @@ BondKind = Literal["yield_curve", "issue_info", "credit_daily"]
 # 空结构。故直连接口:取类型字典后遍历全部类型查询再合并,输出列与原
 # akshare 一致。
 #
-# 限流实测:站点 WAF(openresty)按"IP × 连接数"限制,一次 6 路并发即可触发
-# HTTP 421(窗口数十分钟),报文为 "too many connections from your internet
-# address"。故用共享 Session 保持 keep-alive(30 个请求仅复用 2 条持久连接,
-# 把新建连接数压到最低)且并发保守;421 立即中止并如实提示稍候。
+# 限流实测:站点 WAF(openresty)按"IP × 新建连接数"限制,一次 6 路并发即触发
+# HTTP 421(窗口数十分钟到小时级),报文为 "too many connections from your
+# internet address"。故全串行 + 共享 Session keep-alive —— 整个查询(含字典
+# 请求)全程复用单条持久连接,新建连接数为 1;421 立即中止并如实提示稍候。
 # 注:IPv4 边缘对 Python OpenSSL 指纹返回 403(curl/Schannel 可过),无法借
-# IPv4 绕限流,IPv6 默认路径 + 温和并发是唯一稳妥解。
+# IPv4 绕限流,IPv6 默认路径 + 单连接是最稳妥解。
 _CM_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
