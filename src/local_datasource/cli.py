@@ -142,6 +142,11 @@ def _validate_assets(raw: Any) -> list[dict]:
             problems.append(f"{label}: 缺少 args 映射(该工具的查询参数)")
         elif not isinstance(args, dict):
             problems.append(f"{label}: args 必须是映射,实际为 {type(args).__name__}")
+        elif "file_path" in args:
+            problems.append(
+                f"{label}: args 不接受 file_path(download 自动写入缓存目录,"
+                f"该值不会生效,请删除)"
+            )
 
     if problems:
         raise ManifestError(

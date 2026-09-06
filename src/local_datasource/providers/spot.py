@@ -134,7 +134,7 @@ def _query_sy(symbols: list[str] | None, start_date: str | None, end_date: str |
         raise ValueError(
             f"生意社现货(futures_spot_price_daily, symbols={symbols})"
             f"在 {start_date}~{end_date} 返回空数据"
-            f"(请确认品种代码与区间;数据自 2011-01-04 起,非交易日无数据)"
+            f"(请确认品种代码与区间;数据自约 2013-06 起,更早区间源端报错,非交易日无数据)"
         )
     require_columns(df, _SY_OUTPUT_COLUMNS, "生意社 futures_spot_price_daily")
     df = filter_by_date(df[_SY_OUTPUT_COLUMNS], start_date, end_date)

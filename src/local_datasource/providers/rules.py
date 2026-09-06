@@ -147,6 +147,8 @@ def query_trading_rules(
 
     df = pd.DataFrame(_load_rules(), columns=RULE_COLUMNS)
     df = df[df["market"] == market]
+    # 该市场全量行的最早生效日,供空命中报错提示;提前取值避免错误路径二次解析 YAML
+    earliest = df["effective_from"].min() if not df.empty else None
 
     # 生效区间判定:effective_from <= as_of < effective_to(null = 至今)
     end = df["effective_to"].fillna(_INFINITE_END)
@@ -158,11 +160,7 @@ def query_trading_rules(
 
     if df.empty:
         hint = f"parameter 过滤({parameter!r})无命中" if parameter else "该日期无生效记录"
-        earliest = min(
-            (r["effective_from"] for r in _load_rules() if r["market"] == market),
-            default=None,
-        )
-        earliest_text = f"该市场表内最早生效日为 {earliest}" if earliest else "该市场表内无记录"
+        earliest_text = f"该市场表内最早生效日为 {earliest}" if earliest is not None else "该市场表内无记录"
         raise ValueError(
             f"market={market} 在 as_of={as_of} 无生效的规则参数({hint});"
             f"{earliest_text},可去掉 parameter 过滤或调整 as_of"
