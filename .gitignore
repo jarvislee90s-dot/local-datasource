@@ -57,3 +57,6 @@ demos/test_data_connectivity.py
 
 # Playwright MCP page snapshots
 .playwright-mcp/
+
+# 探测产物
+output/
