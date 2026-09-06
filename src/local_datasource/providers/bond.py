@@ -48,7 +48,9 @@ _CM_HEADERS = {
 _CM_DICT_URL = "https://www.chinamoney.com.cn/ags/ms/cm-u-bond-md/BondBaseInfoSearchCondition"
 _CM_LIST_URL = "https://www.chinamoney.com.cn/ags/ms/cm-u-bond-md/BondMarketInfoList2"
 _CM_PAGE_SIZE = 15
-_CM_WORKERS = 2  # 30 个类型 2 路并发 ≈ 6s;keep-alive 复用连接,新建连接数最少
+# 串行 = 整个查询全程复用单条 keep-alive 连接(含字典请求),新建连接数为 1 ——
+# 实测惩罚期内 2 路并发即触发 421,只有单连接最稳;代价是单次查询约 10s。
+_CM_WORKERS = 1
 
 _CM_SESSION = requests.Session()
 _CM_SESSION.headers.update(_CM_HEADERS)
@@ -144,9 +146,9 @@ def _fetch_one_type(bond_type: str, bond_code: str, bond_issue: str) -> list[dic
 def _bond_info_cm_direct(bond_code: str = "", bond_issue: str = "") -> pd.DataFrame:
     """直连货币网债券信息列表,输出与 akshare bond_info_cm 相同的 7 个中文列。
 
-    遍历全部债券类型(类型间 2 路并发)查询合并去重;任一类型重试后仍失败则
-    整体报错并列出失败类型 —— 绝不静默返回缺类型的残缺结果。触发站点
-    连接数限流(HTTP 421)时立即中止剩余请求并提示稍候。
+    遍历全部债券类型(串行,全程复用单条 keep-alive 连接)查询合并去重;任一
+    类型重试后仍失败则整体报错并列出失败类型 —— 绝不静默返回缺类型的残缺
+    结果。触发站点连接数限流(HTTP 421)时立即中止剩余请求并提示稍候。
     """
     codes = _cm_bond_type_codes()
     failures: list[str] = []
