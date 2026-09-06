@@ -2,7 +2,7 @@
 
 本项目的显著变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)，条目按功能里程碑组织。
 
-## [进行中] 回测数据源扩展（三期）
+## [2026-09-06] 回测数据源扩展（三期，11 → 16 tools）
 
 ### 新增
 
@@ -10,11 +10,17 @@
 - `query_fx`：汇率——`kind=mid` 央行官方中间价（1994 起，25 币种，单位为 100 外币）、`kind=bochina` 中行牌价（起止日期必填：akshare 缺省是任取的示例区间，静默透传会拿到错数据）、`kind=usdcnh` 离岸人民币与 `kind=cross` 交叉盘（Yahoo）
 - `query_spot`：商品现货——`kind=sge` 上金所贵金属现货日线（2016-12 起约 10 年深度）、`kind=sy` 生意社大宗现货（含现货价/主力合约价/基差；起止日期必填，单次区间最长 1 年）
 - `align_series`：多份本库产出的 CSV 按日期对齐合并成宽表（纯本地计算不联网）——并集/交集、前向填充、周/月重采样（每期保留最后一个实际交易日，回测日期真实可成交）
+- `query_trading_rules`：交易规则参数表——包内静态 YAML（随包分发，源自附录 B 调研），157 行参数覆盖 spec §3.4 收录的 11 类（印花税全部档位/过户费/经手费与证管费/红利税按持有期/涨跌幅矩阵含 2026-07-06 主板 ST 改 ±10%/T+1 制度与 T+0 白名单/股指期货保证金与平今手续费/国债期货/融资保证金比例含 2026-01-19 回 100%/期权费率/港股通红利税）；`as_of` 按生效区间取当日生效值（缺省今天=现行值），输出含生效区间/来源/置信度等 12 字段，`confidence` 四级（official/media/to_verify/market_estimate），8 条无法复核官方原文的存疑条目保留 `to_verify` 并在 note 写明存疑点；`market=commodity_futures` 返回查交易所当日结算参数的引导性提示而非报错
+- `download` 批量下载子命令与本地缓存：清单 YAML 批量预取（每条输出 `SKIP`/`FETCH`/`FAIL` 状态，单条失败不中断整批，`--force` 忽略当天新鲜度强制重拉）；缓存布局 `<data_dir>/<tool>/<key>.csv` + 同名 `.manifest.json`（含 args/行数/首末日期/last_fetched），key 由工具名与参数生成、可读且带 8 位哈希；**MCP 查询路径不做任何缓存，`download` 是唯一写缓存的入口**
 
 ### 变更
 
 - 期货主连日线输出列名归一：中文列（日期/开盘价/…/动态结算价）→ 与单合约一致的 8 列 `date,open,high,low,close,volume,hold,settle`（含上游列漂移守卫）；单合约路径列名不变。主连为全历史（自品种上市日或 2005-01-04 取较早，共 83 个主连品种；IF0 特例仅自 2017-01-17 起），quant-chart 消费契约明确排除主连日线，列名变更无存量消费方风险
-- 存量文档实测口径修正：删除过时的"主连约 158 日"说法（README/SKILL.md/server.py/futures.py，实测主连日线为全历史）；标注 A 股日线含 `turnover`/`outstanding_share`/`amount`（筹码分布等衍生计算依赖已满足）；新增"网络环境已知风险"小节（东财非 A 股端点部分网络被拒、金十美联储决议源 2025-09 起停更已改用纽约联储 EFFR、FRED/treasury.gov/stooq 本机实测不可达——本轮海外源选 CBOE/纽约联储直连可达即基于此）；README/SKILL.md 工具数与数据源列表同步至 15 tools
+- 存量文档实测口径修正：删除过时的"主连约 158 日"说法（README/SKILL.md/server.py/futures.py，实测主连日线为全历史）；标注 A 股日线含 `turnover`/`outstanding_share`/`amount`（筹码分布等衍生计算依赖已满足）；新增"网络环境已知风险"小节（东财非 A 股端点部分网络被拒、金十美联储决议源 2025-09 起停更已改用纽约联储 EFFR、FRED/treasury.gov/stooq 本机实测不可达——本轮海外源选 CBOE/纽约联储直连可达即基于此）；README/SKILL.md 工具数与数据源列表同步至 16 tools
+
+### 外部契约
+
+- 无变化：`CoverageError` 类型与 message 语义、被消费表列名（期货单合约日线 `date,open,high,low,close,volume,hold,settle`；分钟表 `datetime,open,high,low,close,volume`）均保持不变，契约回归测试持续锁定；主连日线本就不在 quant-chart 消费范围（其列名归一无存量消费方风险）
 
 ## [2026-08-28] 品种覆盖扩展（二期，7 → 11 tools）
 

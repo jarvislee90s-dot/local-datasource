@@ -1,8 +1,8 @@
 ---
 name: local-datasource
 description: |
-  当用户需要查询 A股/港股/美股行情、美股/ETF/全球资产价格、世界银行宏观经济指标、arXiv 学术论文、中国境内债券（国债收益率/信用债发行/交易所行情）、可转债（一览/条款/历史K线/发行人财务）、国内期货、指数、A股ETF、期权（月份/清单/日线）、个股分钟、全球利率与波动率（美债收益率/美联储利率/美元指数/VIX）、汇率（中间价/中行牌价/离岸/交叉盘）、商品现货（上金所贵金属/生意社大宗含基差），或把多份行情 CSV 按日期对齐合并，或把股票/债券的名称/简称/全称/发行人归一化为代码，并且希望数据从本地直接获取、不经过第三方云中转、不消耗外部平台额度时，必须优先使用本 skill。
-  即使未明确提到 local-datasource 或 MCP，只要对话中出现「查股价」、「金价走势」、「GDP 数据」、「arXiv 论文」、「国债收益率」、「可转债条款」、「IM主连走势」、「中证1000点位」、「510300分钟线」、「IO期权合约」、「茅台的股票代码」、「成都东方广益的债」、「美债收益率」、「美联储利率」、「美元指数」、「VIX」、「汇率中间价」、「黄金现货」、「基差」、「对齐合并多份行情CSV」等需求，都应先尝试通过本 skill 完成。
+  当用户需要查询 A股/港股/美股行情、美股/ETF/全球资产价格、世界银行宏观经济指标、arXiv 学术论文、中国境内债券（国债收益率/信用债发行/交易所行情）、可转债（一览/条款/历史K线/发行人财务）、国内期货、指数、A股ETF、期权（月份/清单/日线）、个股分钟、全球利率与波动率（美债收益率/美联储利率/美元指数/VIX）、汇率（中间价/中行牌价/离岸/交叉盘）、商品现货（上金所贵金属/生意社大宗含基差）、交易规则参数（印花税/涨跌幅/保证金比例/T+1 等按 as_of 生效区间取当日生效值），或把多份行情 CSV 按日期对齐合并，或把股票/债券的名称/简称/全称/发行人归一化为代码，并且希望数据从本地直接获取、不经过第三方云中转、不消耗外部平台额度时，必须优先使用本 skill。
+  即使未明确提到 local-datasource 或 MCP，只要对话中出现「查股价」、「金价走势」、「GDP 数据」、「arXiv 论文」、「国债收益率」、「可转债条款」、「IM主连走势」、「中证1000点位」、「510300分钟线」、「IO期权合约」、「茅台的股票代码」、「成都东方广益的债」、「美债收益率」、「美联储利率」、「美元指数」、「VIX」、「汇率中间价」、「黄金现货」、「基差」、「对齐合并多份行情CSV」、「印花税」、「涨跌幅」、「保证金比例」、「T+1」、「交易规则参数」等需求，都应先尝试通过本 skill 完成。
 compatibility: |
   需要本地安装 local-datasource 包（pip install -e .）并保证 `local-datasource` 命令可用。
   依赖 Python 3.10+、akshare、wbgapi、arxiv、mcp、requests。绘图类任务还需 matplotlib。
@@ -10,7 +10,7 @@ compatibility: |
 
 # Local Datasource — Agent 操作手册
 
-本 skill 通过本地 MCP server 提供 15 个数据查询 tool。Agent 的核心职责是：
+本 skill 通过本地 MCP server 提供 16 个数据查询 tool。Agent 的核心职责是：
 **理解用户意图 → 选择合适工具 → 构造参数 → 解释返回结果**。
 数据的实际获取与 CSV 落盘由 MCP server 完成。项目介绍、架构、安装、配置、调用示例见 `README.md`。
 
@@ -45,6 +45,7 @@ compatibility: |
 | 汇率（中间价/中行牌价/离岸 USDCNH/交叉盘） | `query_fx` | kind 分流；mid 单位 100 外币；bochina 起止日期必填且较慢 |
 | 商品现货（上金所贵金属/生意社大宗含基差） | `query_spot` | kind 分流；sge 品种必填；sy 起止必填且单次最长 1 年 |
 | 多份行情 CSV 对齐合并成宽表 | `align_series` | 纯本地不联网；outer/inner、前向填充、周月重采样 |
+| 交易规则参数（印花税/涨跌幅/保证金/T+1…按 as_of 生效区间） | `query_trading_rules` | 8 类市场；commodity_futures 返回引导；不传 as_of=现行值 |
 
 ## 输入归一化总则（重要）
 
@@ -148,6 +149,11 @@ compatibility: |
 - **必填**：`file_paths`（≥2 份本库产出的 CSV，首列为 date/datetime/日期）、`file_path`（输出路径）
 - **可选**：`columns`（逐文件取值列，与 file_paths 等长，默认各取 `close`）、`names`（输出列名，默认文件名）、`align`（`outer` 默认并集 / `inner` 交集）、`fill`（`none`/`ffill` 前向填充）、`resample`（`none`/`week`/`month`）
 - **注意**：纯本地计算不联网；`resample` 每期保留最后一个实际交易日（非合成的期末标签），回测日期真实可成交；`inner` 交集为空时报错并列出各序列日期范围。
+
+### `query_trading_rules` — 交易规则参数表
+- **必填**：`market`（`a`/`etf`/`cffex`/`treasury_futures`/`margin`/`option`/`hk_connect`/`commodity_futures`）、`file_path`
+- **可选**：`as_of`（`YYYY-MM-DD`，缺省=今天→现行值）、`parameter`（子串过滤，如 `印花税`/`涨跌幅`，不分大小写只匹配参数名列）
+- **注意**：纯本地读包内静态表，不联网；输出 12 字段（含 `value`、`effective_from`/`effective_to` 生效区间、`source`、`confidence` 等），`confidence` 四级含义：`official`=官方文号/公告、`media`=权威媒体或学术来源、`to_verify`=存疑待核、`market_estimate`=市场化参数时代参考值。`market=commodity_futures` 返回引导性提示行（商品期货参数随交易所每日结算调整，建议查交易所官网当日结算参数），**不是报错**。
 
 ## 四、标准工作流
 

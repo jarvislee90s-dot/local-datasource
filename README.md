@@ -6,7 +6,7 @@
 
 ## 一句话介绍
 
-`local-datasource` 把 `akshare`、`yfinance`、`wbgapi`、`arxiv` 等免费公开接口封装成 15 个标准 MCP tool，覆盖 A股/港股/美股/ETF/期货/指数/期权行情、债券与可转债、全球利率与波动率（美债收益率/美联储利率/美元指数/VIX）、汇率、商品现货、多序列对齐合并、世界银行宏观指标与 arXiv 论文，Agent 只需要像调用本地函数一样请求数据，即可获得结构化 CSV 输出。
+`local-datasource` 把 `akshare`、`yfinance`、`wbgapi`、`arxiv` 等免费公开接口封装成 16 个标准 MCP tool，覆盖 A股/港股/美股/ETF/期货/指数/期权行情、债券与可转债、全球利率与波动率（美债收益率/美联储利率/美元指数/VIX）、汇率、商品现货、带生效区间的交易规则参数表、多序列对齐合并、世界银行宏观指标与 arXiv 论文，Agent 只需要像调用本地函数一样请求数据，即可获得结构化 CSV 输出。
 
 ---
 
@@ -45,6 +45,7 @@
 - ✅ **汇率**：央行官方中间价、中行牌价、离岸 USDCNH、主要货币对交叉盘。
 - ✅ **商品现货**：上金所贵金属日线、生意社大宗现货（含主力合约价与基差）。
 - ✅ **对齐合并**：多份本库产出的 CSV 按日期合并成宽表（支持周/月重采样），纯本地计算。
+- ✅ **交易规则参数表**：印花税/过户费/涨跌幅/保证金/T+1 等参数按 `as_of` 取当日生效值（含生效区间、来源与四档置信度标注）；商品期货参数不入表、返回查交易所当日结算参数的引导。
 - ✅ **金融输入归一化**：股票/债券的名称、简称、全称、发行人 → 统一代码（`resolve_stock_code` + `bond_issue`）。
 - ✅ **统一 CSV 输出**：每个 tool 都把结果写到 `file_path`，并返回前 5 行预览。
 - ✅ **零 API Key**：所有默认数据源均免费使用。
@@ -104,6 +105,7 @@ local-datasource
 | 汇率（官方中间价/中行牌价/离岸 USDCNH/主要货币对） | `query_fx` | 外汇局 / 新浪 / yfinance | 否 |
 | 商品现货（上金所贵金属/生意社大宗含基差） | `query_spot` | `akshare`（上金所/生意社 100ppi） | 否 |
 | 多序列对齐合并（宽表/重采样，纯本地） | `align_series` | 本地 `pandas` 计算（不联网） | 否 |
+| 交易规则参数（税费/涨跌幅/保证金/T+1 等，按生效区间） | `query_trading_rules` | 包内静态表（附录 B 调研） | 否 |
 
 ---
 
@@ -153,6 +155,8 @@ akshare / yfinance / wbgapi / arxiv / requests（HTTP 直连）
 │   ├── cache.py                    # 下载缓存纯函数：key/路径/manifest/新鲜度
 │   ├── config.py                   # 加载 config.yaml / 环境变量
 │   ├── formatters.py               # 统一 CSV 输出与预览
+│   ├── assets/
+│   │   └── trading_rules.yaml      # 交易规则参数静态表（附录 B 调研，随包分发）
 │   └── providers/                  # 各数据源适配器
 │       ├── common.py               # 共享工具：日期过滤、分钟深度守卫、腾讯分钟路径
 │       ├── stock.py                # A/HK/US 股票（日线/A股分钟）+ resolve_stock_code 名称反查
@@ -168,7 +172,8 @@ akshare / yfinance / wbgapi / arxiv / requests（HTTP 直连）
 │       ├── global_rates.py         # 全球利率（美债收益率/美联储 EFFR/美元指数/VIX）
 │       ├── fx.py                   # 外汇（中间价/中行牌价/离岸 USDCNH/交叉盘）
 │       ├── spot.py                 # 现货（上金所贵金属/生意社大宗含基差）
-│       └── align.py                # 多序列对齐合并（宽表/重采样，纯本地）
+│       ├── align.py                # 多序列对齐合并（宽表/重采样，纯本地）
+│       └── rules.py                # 交易规则参数表（按 as_of 取生效值，纯本地）
 └── demos/                          # 示例脚本
     └── mcp_query_demo.py           # 多资产查询 + 归一化走势图
 ```
@@ -573,6 +578,18 @@ Tool：`query_spot`（kind=`sge` 上金所贵金属日线，2016-12 起约 10 �
 
 Tool：`align_series`（纯本地合并不联网；`columns`/`names` 与 `file_paths` 一一对应，缺省各取 `close`、列名用文件名；`resample: "week"/"month"` 重采样时每期取最后一个实际交易日）
 
+### 查询交易规则参数：A 股某历史日期的印花税
+
+```json
+{
+  "market": "a",
+  "as_of": "2021-06-01",
+  "file_path": "/tmp/rules_a.csv"
+}
+```
+
+Tool：`query_trading_rules`（纯本地读包内静态表；不传 `as_of` 取现行值；`market: "commodity_futures"` 返回查交易所当日结算参数的引导性提示而非报错；输出含生效区间/来源/置信度等 12 个字段，可选 `parameter: "印花税"` 子串过滤）
+
 ---
 
 参考 `demos/mcp_query_demo.py`：它通过 MCP 调用多个工具，读取生成的 CSV，计算归一化价格，并绘制对比图。
@@ -632,7 +649,7 @@ LOCAL_DATASOURCE_CONFIG=/path/to/config.yaml local-datasource
 python -m pytest tests/ -v
 ```
 
-包含配置加载、格式化、14 个 provider 的测试、MCP server 工具注册（15 个 tool）。
+包含配置加载、格式化、缓存与 CLI、15 个 provider 的测试、MCP server 工具注册（16 个 tool）。
 
 ---
 
@@ -663,7 +680,7 @@ python -m pytest tests/ -v
 | 运行位置 | 本机 | Kimi Code 云端 |
 | 登录/账号 | 不需要 | 需要 Kimi Code 账号 |
 | 费用 | 免费（受公开接口限额影响） | 消耗 Kimi Code 额度 |
-| 数据源 | A/HK/US 股票、境内债券/可转债、期货、指数、A股 ETF、期权、美股/全球资产、全球利率与波动率（美债/EFFR/美元指数/VIX）、汇率、商品现货（贵金属/大宗含基差）、World Bank、arXiv | 更多，包括天眼查、Google Scholar、元典法律等 |
+| 数据源 | A/HK/US 股票、境内债券/可转债、期货、指数、A股 ETF、期权、美股/全球资产、全球利率与波动率（美债/EFFR/美元指数/VIX）、汇率、商品现货（贵金属/大宗含基差）、交易规则参数表、多序列对齐合并、World Bank、arXiv | 更多，包括天眼查、Google Scholar、元典法律等 |
 | 数据链路 | Agent → 本地 Server → 公开接口 | Agent → Kimi 云服务 → 后端数据源 |
 | 可定制性 | 源码本地可见，可修改/扩展 | 黑盒，只能使用官方暴露的 tool |
 | 跨 Agent 复用 | 标准 MCP Server，可被多家 Agent 复用 | 仅限 Kimi Code 内部 |
