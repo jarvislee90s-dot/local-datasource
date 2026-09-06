@@ -643,10 +643,11 @@ LOCAL_DATASOURCE_CONFIG=/path/to/config.yaml local-datasource
 
 ## 测试
 
-测试文件位于本地 `tests/` 目录（未提交到 GitHub）：
+测试随仓库分发（`tests/` 目录）。离线单测不连网；联网冒烟默认开启，设 `SKIP_INTEGRATION=1` 跳过：
 
 ```bash
-python -m pytest tests/ -v
+python -m pytest tests/ -v              # 全量(含联网冒烟)
+SKIP_INTEGRATION=1 python -m pytest tests/ -q   # 仅离线
 ```
 
 包含配置加载、格式化、缓存与 CLI、15 个 provider 的测试、MCP server 工具注册（16 个 tool）。

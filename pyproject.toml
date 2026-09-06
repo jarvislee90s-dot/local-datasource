@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Local MCP server for financial, macro, and academic data"
 requires-python = ">=3.10"
 dependencies = [
-    "mcp>=1.6.0",
+    "mcp>=1.6.0,<2",
     "akshare>=1.18.0",
     "yfinance>=0.2.54",
     "wbgapi>=1.0.12",
