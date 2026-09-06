@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from functools import lru_cache
 from typing import Literal
@@ -35,12 +34,13 @@ BondKind = Literal["yield_curve", "issue_info", "credit_daily"]
 # 空结构。故直连接口:取类型字典后遍历全部类型查询再合并,输出列与原
 # akshare 一致。
 #
-# 限流实测:站点 WAF(openresty)按"IP × 新建连接数"限制,一次 6 路并发即触发
-# HTTP 421(窗口数十分钟到小时级),报文为 "too many connections from your
-# internet address"。故全串行 + 共享 Session keep-alive —— 整个查询(含字典
-# 请求)全程复用单条持久连接,新建连接数为 1;421 立即中止并如实提示稍候。
+# 限流实测(家庭宽带 IPv6/IPv4 与手机热点三出口一致复现):WAF(openresty)按
+# "IP × 窗口请求数"限流,阈值极低 —— 无间隔连发 5 个即触发 HTTP 421(报文
+# "too many connections from your internet address"),20s/5s 间隔在配额耗尽
+# 后也无效,窗口需静默数分钟恢复。策略:进程级共享单条 keep-alive 连接 +
+# 每请求固定间隔(把 31 个请求摊进窗口) + 421 长退避一次后放弃并如实提示。
 # 注:IPv4 边缘对 Python OpenSSL 指纹返回 403(curl/Schannel 可过),无法借
-# IPv4 绕限流,IPv6 默认路径 + 单连接是最稳妥解。
+# IPv4 绕限流。
 _CM_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
@@ -48,20 +48,30 @@ _CM_HEADERS = {
 _CM_DICT_URL = "https://www.chinamoney.com.cn/ags/ms/cm-u-bond-md/BondBaseInfoSearchCondition"
 _CM_LIST_URL = "https://www.chinamoney.com.cn/ags/ms/cm-u-bond-md/BondMarketInfoList2"
 _CM_PAGE_SIZE = 15
-# 串行 = 整个查询全程复用单条 keep-alive 连接(含字典请求),新建连接数为 1 ——
-# 实测惩罚期内 2 路并发即触发 421,只有单连接最稳;代价是单次查询约 10s。
-_CM_WORKERS = 1
+_CM_REQUEST_INTERVAL = 2.5  # 相邻请求最小间隔(秒):窗口预算摊薄,30+ 个请求 ≈ 80s
+_CM_RATE_LIMIT_BACKOFF = 240  # 421 后静默退避(秒),退避后重试一次再失败则报错
 
 _CM_SESSION = requests.Session()
 _CM_SESSION.headers.update(_CM_HEADERS)
+_CM_LAST_REQUEST_AT = 0.0
 
 
 class _CmRateLimited(Exception):
-    """货币网连接数限流(HTTP 421):按 IP 限流,应立即中止并提示稍候。"""
+    """货币网窗口限流(HTTP 421):按 IP 限请求数,退避后可恢复。"""
+
+
+def _cm_throttle() -> None:
+    """相邻请求强制最小间隔,把请求数摊进 WAF 窗口。"""
+    global _CM_LAST_REQUEST_AT
+    wait = _CM_REQUEST_INTERVAL - (time.monotonic() - _CM_LAST_REQUEST_AT)
+    if wait > 0:
+        time.sleep(wait)
+    _CM_LAST_REQUEST_AT = time.monotonic()
 
 
 def _cm_post(url: str, data: dict) -> requests.Response:
-    """货币网 POST(keep-alive 复用连接;421 判定在调用方)。"""
+    """货币网 POST(进程级单连接 keep-alive + 节流;421 判定在调用方)。"""
+    _cm_throttle()
     return _CM_SESSION.post(url, data=data, timeout=30)
 
 _CM_COLUMN_MAP = {
@@ -98,9 +108,10 @@ def _cm_bond_type_codes() -> tuple[str, ...]:
 
 
 def _cm_fetch(bond_type: str, page_no: int, bond_code: str, bond_issue: str) -> dict:
-    """查询单类型单页;失败重试一次,仍失败抛错(调用方汇总)。
+    """查询单类型单页;网络异常重试一次(2s),421 长退避一次再失败即抛限流。
 
-    HTTP 421 = 站点按 IP 限连接数,重试无意义,抛专用限流异常由上层立即中止。
+    HTTP 421 = WAF 窗口限流:先静默 4 分钟让窗口恢复,重试一次仍 421 则抛
+    专用限流异常由上层中止并如实提示(绝不带着限流继续打)。
     """
     payload = {
         "pageNo": str(page_no),
@@ -115,14 +126,16 @@ def _cm_fetch(bond_type: str, page_no: int, bond_code: str, bond_issue: str) -> 
         "entyDefinedCode": "",
         "rtngShrt": "",
     }
+    rate_limited = False
     last_exc: Exception | None = None
-    for attempt in range(2):  # 重试一次:偶发抖动
+    for attempt in range(2):  # attempt 0:正常;attempt 1:421 退避后或网络错误 2s 后
         if attempt:
-            time.sleep(2)
+            time.sleep(_CM_RATE_LIMIT_BACKOFF if rate_limited else 2)
         try:
             r = _cm_post(_CM_LIST_URL, payload)
             if r.status_code == 421:
-                raise _CmRateLimited("货币网连接数限流(HTTP 421)")
+                rate_limited = True
+                continue
             data = r.json().get("data") or {}
             if "errorMsg" in data:
                 raise ValueError(f"货币网拒绝查询({data['errorMsg']})")
@@ -131,6 +144,8 @@ def _cm_fetch(bond_type: str, page_no: int, bond_code: str, bond_issue: str) -> 
             raise
         except Exception as e:  # noqa: BLE001 - 网络失败类型不定,统一重试后汇总
             last_exc = e
+    if rate_limited:
+        raise _CmRateLimited("货币网窗口限流(HTTP 421),退避重试后仍限流")
     raise ValueError(f"bondType={bond_type} 第{page_no}页: {last_exc}") from last_exc
 
 
@@ -146,32 +161,28 @@ def _fetch_one_type(bond_type: str, bond_code: str, bond_issue: str) -> list[dic
 def _bond_info_cm_direct(bond_code: str = "", bond_issue: str = "") -> pd.DataFrame:
     """直连货币网债券信息列表,输出与 akshare bond_info_cm 相同的 7 个中文列。
 
-    遍历全部债券类型(串行,全程复用单条 keep-alive 连接)查询合并去重;任一
-    类型重试后仍失败则整体报错并列出失败类型 —— 绝不静默返回缺类型的残缺
-    结果。触发站点连接数限流(HTTP 421)时立即中止剩余请求并提示稍候。
+    串行遍历全部债券类型(进程级单条 keep-alive 连接 + 每请求节流),合并
+    去重;任一类型重试后仍失败则整体报错并列出失败类型 —— 绝不静默返回缺
+    类型的残缺结果。触发 WAF 窗口限流(HTTP 421)时先退避 4 分钟重试一次,
+    仍限流则中止剩余请求并如实提示。
     """
     codes = _cm_bond_type_codes()
     failures: list[str] = []
     collected: list[dict] = []
     rate_limited = False
-    pool = ThreadPoolExecutor(max_workers=_CM_WORKERS)
-    try:
-        futures = [(t, pool.submit(_fetch_one_type, t, bond_code, bond_issue)) for t in codes]
-        for t, fut in futures:
-            try:
-                collected += fut.result()
-            except _CmRateLimited:
-                rate_limited = True
-                break
-            except Exception as e:  # noqa: BLE001 - 单类型失败汇总后统一报错
-                failures.append(f"{t}({e})")
-    finally:
-        pool.shutdown(wait=False, cancel_futures=True)
+    for t in codes:
+        try:
+            collected += _fetch_one_type(t, bond_code, bond_issue)
+        except _CmRateLimited:
+            rate_limited = True
+            break
+        except Exception as e:  # noqa: BLE001 - 单类型失败汇总后统一报错
+            failures.append(f"{t}({e})")
     if rate_limited:
         raise ValueError(
-            "货币网连接数限流(HTTP 421,按 IP 限新建连接数,窗口数十分钟)。"
-            "请稍候再重试;同一会话内对同一发行人/代码的重复查询建议走 "
-            "download 缓存,避免反复触发限流"
+            "货币网窗口限流(HTTP 421,按 IP 限窗口内请求数,静默数分钟可恢复)。"
+            "已自动退避重试一次仍限流:请稍候数分钟再试;同一会话内对同一"
+            "发行人/代码的重复查询建议走 download 缓存"
         )
     if failures:
         raise ValueError(
