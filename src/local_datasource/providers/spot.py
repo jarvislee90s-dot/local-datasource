@@ -18,7 +18,7 @@ import akshare as ak
 import pandas as pd
 
 from local_datasource.formatters import format_csv_output
-from local_datasource.providers.common import filter_by_date, require_columns
+from local_datasource.providers.common import check_kind_params, filter_by_date, require_columns
 
 
 SpotKind = Literal["sge", "sy"]
@@ -43,11 +43,8 @@ _SY_MAX_SPAN_DAYS = 365
 
 
 def _check_param_scope(kind: str, symbol: str | None, symbols: list[str] | None) -> None:
-    """kind 专属参数传错 kind 时显式报错(不静默忽略,对齐 fx.py 的参数守卫)。"""
-    if symbol is not None and kind != "sge":
-        raise ValueError(f"symbol 仅在 kind=sge 时有效, kind={kind} 不支持")
-    if symbols is not None and kind != "sy":
-        raise ValueError(f"symbols 仅在 kind=sy 时有效, kind={kind} 不支持")
+    """kind 专属参数传错 kind 时显式报错(不静默忽略)。"""
+    check_kind_params(kind, ("symbol", symbol, "sge"), ("symbols", symbols, "sy"))
 
 
 def _load_sge_symbols() -> list[str]:

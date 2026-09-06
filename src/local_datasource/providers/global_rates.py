@@ -21,10 +21,14 @@ from typing import Literal
 import akshare as ak
 import pandas as pd
 import requests
-import yfinance as yf
 
 from local_datasource.formatters import format_csv_output
-from local_datasource.providers.common import filter_by_date, require_columns
+from local_datasource.providers.common import (
+    check_kind_params,
+    fetch_yahoo_daily,
+    filter_by_date,
+    require_columns,
+)
 
 
 GlobalRatesKind = Literal["us_treasury", "fed_rate", "dxy", "vix"]
@@ -66,10 +70,9 @@ _CBOE_VIX_URL = "https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_His
 _CBOE_VIX_COLUMNS = {"DATE": "date", "OPEN": "open", "HIGH": "high", "LOW": "low", "CLOSE": "close"}
 
 
-def _check_tenure_scope(kind: str, tenure: str | None) -> None:
-    """tenure 仅对 us_treasury 有效,其他 kind 传入直接报错(不静默忽略)。"""
-    if tenure is not None and kind != "us_treasury":
-        raise ValueError(f"tenure 仅在 kind=us_treasury 时有效, kind={kind} 不支持")
+def _query_dxy_yfinance(start_date: str | None, end_date: str | None) -> pd.DataFrame:
+    """yfinance 美元指数回退源:DX-Y.NYB 日线,输出 date/open/high/low/close。"""
+    return fetch_yahoo_daily(_DXY_YAHOO_TICKER, start_date, end_date, _DXY_COLUMNS)
 
 
 def _query_us_treasury(tenure: str | None, start_date: str | None, end_date: str | None) -> pd.DataFrame:
@@ -167,26 +170,6 @@ def _query_dxy_eastmoney() -> pd.DataFrame:
     return df.rename(columns=_EM_DXY_COLUMNS)[_DXY_COLUMNS]
 
 
-def _query_dxy_yfinance(start_date: str | None, end_date: str | None) -> pd.DataFrame:
-    """yfinance 美元指数回退源:DX-Y.NYB 日线,输出 date/open/high/low/close。"""
-    kwargs: dict = {"progress": False}
-    if start_date and end_date:
-        kwargs["start"] = start_date
-        # yfinance 的 end 为排他区间,repo 契约是闭区间 → 补一天,再由 filter_by_date 截齐
-        kwargs["end"] = (pd.Timestamp(end_date) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-    else:
-        kwargs["period"] = "max"
-    df = yf.download(_DXY_YAHOO_TICKER, **kwargs)
-    if df is None or df.empty:
-        raise ValueError(f"yfinance {_DXY_YAHOO_TICKER} 返回空数据")
-    if isinstance(df.columns, pd.MultiIndex):  # 单标的下载也会带 ticker 层,取价格层
-        df.columns = df.columns.get_level_values(0)
-    df = df.reset_index()
-    df.columns = [str(c).lower() for c in df.columns]
-    require_columns(df, _DXY_COLUMNS, f"yfinance {_DXY_YAHOO_TICKER}", hint="请检查 yfinance 版本")
-    return df[_DXY_COLUMNS]
-
-
 def _first_available(
     sources: Sequence[tuple[str, Callable[[], pd.DataFrame]]],
     what: str,
@@ -255,7 +238,7 @@ def query_global_rates(
     """
     if kind not in ("us_treasury", "fed_rate", "dxy", "vix"):
         raise ValueError(f"Unsupported global_rates kind: {kind}, use 'us_treasury', 'fed_rate', 'dxy' or 'vix'")
-    _check_tenure_scope(kind, tenure)
+    check_kind_params(kind, ("tenure", tenure, "us_treasury"))
     if kind == "us_treasury":
         df = _query_us_treasury(tenure, start_date, end_date)
     elif kind == "fed_rate":

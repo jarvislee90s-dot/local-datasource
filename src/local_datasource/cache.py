@@ -57,16 +57,10 @@ def make_key(tool: str, args: dict) -> str:
     - 末尾**总是**追加规范化串的 md5 前 8 位(如 ``query_stock-adjust-qfq-3f2a1b0c``):
       可读性保留的同时,清洗碰撞/截断不再可能破坏唯一性。
     """
-    canonical = "&".join(
-        f"{k}={_normalize_value(args[k])}"
-        for k in sorted(args)
-        if args[k] is not None
-    )
+    items = [(k, args[k]) for k in sorted(args) if args[k] is not None]
+    canonical = "&".join(f"{k}={_normalize_value(v)}" for k, v in items)
     segments = [_sanitize(tool)]
-    for k in sorted(args):
-        if args[k] is None:
-            continue
-        segments.append(_sanitize(f"{k}-{_normalize_value(args[k])}"))
+    segments += [_sanitize(f"{k}-{_normalize_value(v)}") for k, v in items]
     readable = "-".join(s for s in segments if s)
     if len(readable) > _KEY_MAX_LEN:
         readable = readable[:_KEY_MAX_LEN].rstrip("-")

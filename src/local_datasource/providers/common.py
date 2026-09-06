@@ -10,6 +10,7 @@ from datetime import datetime
 
 import akshare as ak
 import pandas as pd
+import yfinance as yf
 
 
 class CoverageError(ValueError):
@@ -69,6 +70,17 @@ def validate_period(period: str) -> None:
         raise ValueError(f"Unsupported period: {period}, use 'daily' or 'min'")
 
 
+def check_kind_params(kind: str, *specs: tuple[str, object, str]) -> None:
+    """kind 专属参数守卫:specs 形如 ``(参数名, 值, 允许的 kind)``。
+
+    专属参数传到其他 kind 时显式报错(不静默忽略),报错文案在
+    fx/spot/global_rates 三个聚合工具间保持统一。
+    """
+    for name, value, allowed in specs:
+        if value is not None and kind != allowed:
+            raise ValueError(f"{name} 仅在 kind={allowed} 时有效, kind={kind} 不支持")
+
+
 def require_minute_range(start_date: str | None, end_date: str | None) -> None:
     """分钟模式必须提供起止日期(深度有限,用于覆盖校验)。"""
     if not start_date or not end_date:
@@ -113,3 +125,41 @@ def fetch_tencent_minute(symbol: str, freq: str, start_date: str, end_date: str)
     if df.empty:
         raise ValueError(f"No minute data for {symbol} between {start_date} and {end_date}")
     return df
+
+
+def fetch_yahoo_daily(
+    ticker: str,
+    start_date: str | None,
+    end_date: str | None,
+    columns: list[str],
+) -> pd.DataFrame:
+    """Yahoo Finance 日线通用路径(美元指数回退源/离岸与交叉盘共用)。
+
+    yfinance 的 ``end`` 为排他区间,repo 契约是闭区间 → 补一天,再由
+    ``filter_by_date`` 截齐;start/end 缺任一时取 ``period="max"``。
+    Yahoo 异常,以及被拒/限流时 yfinance 不抛异常而返回空表的情形,
+    统一报含"不可达"的网络指引并保留异常链。
+    """
+    kwargs: dict = {"progress": False}
+    if start_date and end_date:
+        kwargs["start"] = start_date
+        kwargs["end"] = (pd.Timestamp(end_date) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    else:
+        kwargs["period"] = "max"
+    try:
+        df = yf.download(ticker, **kwargs)
+    except Exception as e:  # noqa: BLE001 - Yahoo 限流/断网时异常类型不定,统一报网络指引
+        raise ValueError(
+            f"Yahoo Finance({ticker})请求失败: {e}。该源在当前网络不可达,请检查网络/代理后重试"
+        ) from e
+    if df is None or df.empty:
+        raise ValueError(
+            f"Yahoo Finance({ticker})返回空数据。该源在当前网络不可达(或代码无数据),"
+            f"请检查网络/代理后重试"
+        )
+    if isinstance(df.columns, pd.MultiIndex):  # 单标的下载也会带 ticker 层,取价格层
+        df.columns = df.columns.get_level_values(0)
+    df = df.reset_index()
+    df.columns = [str(c).lower() for c in df.columns]
+    require_columns(df, columns, f"yfinance {ticker}", hint="请检查 yfinance 版本")
+    return df[columns]

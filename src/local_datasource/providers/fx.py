@@ -17,10 +17,15 @@ from typing import Literal
 
 import akshare as ak
 import pandas as pd
-import yfinance as yf
 
 from local_datasource.formatters import format_csv_output
-from local_datasource.providers.common import filter_by_date, require_columns, to_compact_date
+from local_datasource.providers.common import (
+    check_kind_params,
+    fetch_yahoo_daily,
+    filter_by_date,
+    require_columns,
+    to_compact_date,
+)
 
 
 FxKind = Literal["mid", "bochina", "usdcnh", "cross"]
@@ -124,45 +129,26 @@ def _query_bochina(symbol: str | None, start_date: str | None, end_date: str | N
 
 
 def _query_yahoo_close(ticker: str, start_date: str | None, end_date: str | None) -> pd.DataFrame:
-    """Yahoo Finance 日线收盘价:输出 date/close;yfinance 的 end 为排他区间 → 补一天。
+    """Yahoo Finance 日线收盘价:输出 date/close(共享 helper 处理 end 排他与网络报错)。"""
+    return fetch_yahoo_daily(ticker, start_date, end_date, ["date", "close"])
 
-    Yahoo 请求失败(异常或空表)时报含"不可达"的可读错误并保留异常链。
-    """
-    kwargs: dict = {"progress": False}
-    if start_date and end_date:
-        kwargs["start"] = start_date
-        # yfinance 的 end 为排他区间,repo 契约是闭区间 → 补一天,再由 filter_by_date 截齐
-        kwargs["end"] = (pd.Timestamp(end_date) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-    else:
-        kwargs["period"] = "max"
-    try:
-        df = yf.download(ticker, **kwargs)
-    except Exception as e:  # noqa: BLE001 - Yahoo 限流/断网时异常类型不定,统一报网络指引
-        raise ValueError(
-            f"Yahoo Finance({ticker})请求失败: {e}。该源在当前网络不可达,请检查网络/代理后重试"
-        ) from e
-    if df is None or df.empty:
-        # 本机被 Yahoo 拒(429/403)时 yfinance 通常不抛异常而是返回空表
-        raise ValueError(
-            f"Yahoo Finance({ticker})返回空数据。该源在当前网络不可达(或代码无数据),"
-            f"请检查网络/代理后重试"
-        )
-    if isinstance(df.columns, pd.MultiIndex):  # 单标的下载也会带 ticker 层,取价格层
-        df.columns = df.columns.get_level_values(0)
-    df = df.reset_index()
-    df.columns = [str(c).lower() for c in df.columns]
-    require_columns(df, ["date", "close"], f"yfinance {ticker}", hint="请检查 yfinance 版本")
-    return df[["date", "close"]]
+
+def _finalize_close_series(
+    df: pd.DataFrame, label: str, start_date: str | None, end_date: str | None
+) -> pd.DataFrame:
+    """收盘价序列收尾:区间过滤 → 丢弃 close 缺失行 → 空表报错 → 升序(usdcnh/cross 共用)。"""
+    df = filter_by_date(df, start_date, end_date)
+    df = df.dropna(subset=["close"])  # 与 global_rates 一致:输出不残留 close 缺失行
+    if df.empty:
+        raise ValueError(f"{label} 在 {start_date or '最早'}~{end_date or '最新'} 区间无数据")
+    return df.sort_values("date").reset_index(drop=True)
 
 
 def _query_usdcnh(start_date: str | None, end_date: str | None) -> pd.DataFrame:
     """离岸人民币 USDCNH=X 日线:输出 date/close 升序。"""
-    df = _query_yahoo_close(_USDCNH_TICKER, start_date, end_date)
-    df = filter_by_date(df, start_date, end_date)
-    df = df.dropna(subset=["close"])  # 与 global_rates 一致:输出不残留 close 缺失行
-    if df.empty:
-        raise ValueError(f"usdcnh 在 {start_date or '最早'}~{end_date or '最新'} 区间无数据")
-    return df.sort_values("date").reset_index(drop=True)
+    return _finalize_close_series(
+        _query_yahoo_close(_USDCNH_TICKER, start_date, end_date), "usdcnh", start_date, end_date
+    )
 
 
 def _normalize_pair(pair: str) -> str:
@@ -178,22 +164,9 @@ def _query_cross(pair: str | None, start_date: str | None, end_date: str | None)
     if not pair or not str(pair).strip():
         raise ValueError("kind=cross 需提供 pair(如 'EUR/USD' 或 'EURUSD')")
     ticker = f"{_normalize_pair(pair)}=X"
-    df = _query_yahoo_close(ticker, start_date, end_date)
-    df = filter_by_date(df, start_date, end_date)
-    df = df.dropna(subset=["close"])  # 与 usdcnh 一致:输出不残留 close 缺失行
-    if df.empty:
-        raise ValueError(f"cross {ticker} 在 {start_date or '最早'}~{end_date or '最新'} 区间无数据")
-    return df.sort_values("date").reset_index(drop=True)
-
-
-def _check_param_scope(kind: str, currency: str | None, symbol: str | None, pair: str | None) -> None:
-    """kind 专属参数传错 kind 时显式报错(不静默忽略,对齐 global_rates 的 tenure 守卫)。"""
-    if currency is not None and kind != "mid":
-        raise ValueError(f"currency 仅在 kind=mid 时有效, kind={kind} 不支持")
-    if symbol is not None and kind != "bochina":
-        raise ValueError(f"symbol 仅在 kind=bochina 时有效, kind={kind} 不支持")
-    if pair is not None and kind != "cross":
-        raise ValueError(f"pair 仅在 kind=cross 时有效, kind={kind} 不支持")
+    return _finalize_close_series(
+        _query_yahoo_close(ticker, start_date, end_date), f"cross {ticker}", start_date, end_date
+    )
 
 
 def query_fx(
@@ -216,7 +189,12 @@ def query_fx(
     """
     if kind not in ("mid", "bochina", "usdcnh", "cross"):
         raise ValueError(f"Unsupported fx kind: {kind}, use 'mid', 'bochina', 'usdcnh' or 'cross'")
-    _check_param_scope(kind, currency, symbol, pair)
+    check_kind_params(
+        kind,
+        ("currency", currency, "mid"),
+        ("symbol", symbol, "bochina"),
+        ("pair", pair, "cross"),
+    )
     if kind == "mid":
         df = _query_mid(currency, start_date, end_date)
     elif kind == "bochina":

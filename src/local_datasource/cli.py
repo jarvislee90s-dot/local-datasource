@@ -220,7 +220,8 @@ def run_download(argv: list[str] | None = None) -> int:
 
         try:
             TOOL_FUNCS[tool](**call_args)
-            manifest_path = write_manifest(data_dir, tool, key, effective, csv_path)
+            # write_manifest 内部重算的路径与 cache_paths 一致,直接复用已解包的 manifest_path
+            write_manifest(data_dir, tool, key, effective, csv_path)
             manifest = load_manifest(manifest_path)
             rows = manifest["rows"] if manifest else 0
             print(f"FETCH {tool}/{key} {rows} rows")
