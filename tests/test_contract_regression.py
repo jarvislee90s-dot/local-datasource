@@ -1,16 +1,11 @@
 # tests/test_contract_regression.py
 """契约回归基线(Task 0,先于一切改动):把现存对外契约钉死。
 
-全部离线,无网络调用。本文件不提交(tests/ 已被 .gitignore 忽略)。
+全部离线,无网络调用。
 
-后续任务约定(改这里时只动 EXPECTED_TOOL_NAMES 与注释,其余断言不动):
-- Task 1 后工具数 11 → 12(query_global_rates)
-- Task 5 后工具数 12 → 13
-- Task 6 后工具数 13 → 14(query_spot)
-- Task 7 后工具数 14 → 15(align_series)
-- Task 11 后工具数 15 → 16(query_trading_rules)
-- Task 12 后:文档同步(README/SKILL/CHANGELOG)
+约定:工具数变化时只动 EXPECTED_TOOL_NAMES(单一改动点),其余断言不动。
 """
+import asyncio
 import re
 
 import pandas as pd
@@ -18,7 +13,7 @@ import pytest
 
 from local_datasource.providers.common import CoverageError, guard_minute_depth
 from local_datasource.providers.futures import query_futures
-from local_datasource.server import build_tools
+from local_datasource.server import mcp
 
 
 # ---------- 基线(写死,来自 src/local_datasource/server.py @ Task 0) ----------
@@ -54,18 +49,21 @@ EXPECTED_REQUIRED = {
 
 # ---------- 工具清单 ----------
 
-def test_build_tools_count():
+def _tools_by_name() -> dict:
+    return {t.name: t for t in asyncio.run(mcp.list_tools())}
+
+
+def test_tools_count():
     """工具数 = EXPECTED_TOOL_NAMES 长度(单一改动点)。
 
     Task 11 起基线 16(query_trading_rules 已入列)。
     """
-    tools = build_tools()
-    assert len(tools) == len(EXPECTED_TOOL_NAMES)
+    assert len(_tools_by_name()) == len(EXPECTED_TOOL_NAMES)
 
 
-def test_build_tools_names_exact():
+def test_tools_names_exact():
     """注册名恰为 EXPECTED_TOOL_NAMES:既查集合(无缺失/多余),也查无重复。"""
-    names = [t.name for t in build_tools()]
+    names = list(_tools_by_name())
     assert set(names) == set(EXPECTED_TOOL_NAMES)
     assert len(names) == len(set(names)), "存在重复注册的工具名"
 
@@ -73,9 +71,9 @@ def test_build_tools_names_exact():
 # ---------- required 字段 ----------
 
 def test_required_fields_of_stock_futures_index():
-    tools = {t.name: t for t in build_tools()}
+    tools = _tools_by_name()
     for name, expected in EXPECTED_REQUIRED.items():
-        actual = tools[name].inputSchema["required"]
+        actual = tools[name].input_schema["required"]
         assert sorted(actual) == sorted(expected), f"{name}.required 变动: {actual}"
 
 
