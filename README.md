@@ -635,8 +635,8 @@ LOCAL_DATASOURCE_CONFIG=/path/to/config.yaml local-datasource
 `src/local_datasource/providers/` 下的每个文件都是一个独立适配器，新增数据源的步骤：
 
 1. 在 `providers/` 新增一个 Python 文件，实现 `query_xxx(...)` 函数，返回 `tuple[str, str]`（文件路径 + 预览文本）。
-2. 在 `server.py` 的 `build_tools()` 中注册新 tool。
-3. 在 `handle_call_tool()` 中增加路由。
+2. 在 `server.py` 新增一个 `@mcp.tool(structured_output=False)` 薄工具函数：参数注解（`Annotated`/`Literal`/`Field`）即客户端可见 schema，docstring 即工具描述；函数体一行转发 `_safe_summary`。
+3. 在 `_summary_for()` 中增加对应路由分支。
 4. 更新 `SKILL.md` 和 `README.md` 的 tool 说明。
 
 ---

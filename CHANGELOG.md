@@ -2,6 +2,9 @@
 
 本项目的显著变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)，条目按功能里程碑组织。
 
+## 2026-09-07
+- feat(mcp): 入口层迁移 mcp 2.x（依赖 `mcp>=2.0.0,<3`）——16 个工具改 `MCPServer` 高层 API 注册（签名驱动 schema，工具/参数描述逐字保留）；`_safe_summary` 统一错误包装，`CoverageError` 补数指引保证以文本到达客户端；新增 stdio 探针回归测试；providers/CLI 零改动。已知 schema 渲染差异（spec §4.4）：参数 title 字段、可选参数 anyOf 渲染、use_yfinance 缺省显示 null（实际行为不变）。
+
 ## [2026-09-06] 修复：query_bond(issue_info) 直连中国货币网
 
 ### 修复

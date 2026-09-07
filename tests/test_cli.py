@@ -9,7 +9,6 @@
 
 mock 方式:monkeypatch ``cli.TOOL_FUNCS`` 条目(provider 为模块级 dict,可整体替换)。
 """
-import asyncio
 import json
 import os
 import sys
@@ -21,6 +20,7 @@ import pytest
 import yaml
 
 import local_datasource.cli as cli
+from local_datasource import server as server_module
 from local_datasource.cache import cache_paths, make_key
 from local_datasource.server import main as server_main
 
@@ -218,22 +218,21 @@ def test_one_failure_does_not_abort_batch(tmp_path, monkeypatch, capsys):
 
 
 def test_no_subcommand_still_starts_server(monkeypatch):
-    """main() 无 download 参数 → 照常 asyncio.run(_main());有 download → 转交 CLI。"""
+    """main() 无 download 参数 → 照常 mcp.run() 启动 MCP stdio server;有 download → 转交 CLI。"""
     started = []
     download_calls = []
 
-    def fake_asyncio_run(coro, *args, **kwargs):
-        started.append(coro)
-        coro.close()  # 关掉协程,不真正启动 stdio server
+    def fake_mcp_run(*args, **kwargs):
+        started.append(True)  # 记录调用,不真正启动 stdio server
 
     def fake_run_download(argv):
         download_calls.append(list(argv))
         return 0
 
     monkeypatch.setattr(cli, "run_download", fake_run_download)
-    monkeypatch.setattr(asyncio, "run", fake_asyncio_run)
+    monkeypatch.setattr(server_module.mcp, "run", fake_mcp_run)
 
-    # 无参:启动 server(asyncio.run 被调用)
+    # 无参:启动 server(mcp.run 被调用)
     monkeypatch.setattr(sys, "argv", ["local-datasource"])
     server_main()
     assert len(started) == 1
@@ -245,7 +244,7 @@ def test_no_subcommand_still_starts_server(monkeypatch):
     with pytest.raises(SystemExit) as excinfo:
         server_main()
     assert excinfo.value.code == 0
-    assert len(started) == 1  # asyncio.run 未被再次调用
+    assert len(started) == 1  # mcp.run 未被再次调用
     assert download_calls == [["--config", "x.yaml"]]
 
 
