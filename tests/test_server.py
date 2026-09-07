@@ -23,9 +23,9 @@ def _prop(schema: dict, key: str) -> dict:
 
 
 def test_tools_count_and_names():
-    tools = asyncio.run(mcp.list_tools())
+    tools = _tools_by_name()
     assert len(tools) == 16
-    assert {t.name for t in tools} == {
+    assert set(tools) == {
         "query_stock", "query_yfinance", "query_worldbank", "query_arxiv",
         "query_bond", "query_convertible_bond", "resolve_stock_code",
         "query_futures", "query_index", "query_etf", "query_options",
